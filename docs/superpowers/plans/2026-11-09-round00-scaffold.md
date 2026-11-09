@@ -1106,9 +1106,10 @@ Expected: `No such file or directory`
 
 | 위치 | 켜짐 | 역할 |
 |---|---|---|
-| 집 RTX 3060 PC (Ubuntu + k3s) | 상시 | 로컬 LLM, Neo4j, Postgres, 관측 스택, Argo CD |
-| Azure AKS | 작업할 때만 | 상태 없는 앱(에이전트 API·MCP 서버·웹 UI) |
+| 집 RTX 3060 PC (Ubuntu + k3s) | 상시 | 로컬 LLM, Neo4j, Postgres, 관측 스택, Argo CD, 데모 앱·에이전트·MCP 서버 |
+| Azure AKS | 작업할 때만 | 상태 없는 앱(에이전트 API·MCP 서버·웹 UI), 데모 앱 사본 |
 | Azure OpenAI | 사용량 과금 | 계획·진단·그래프 추출 |
+| Langfuse Cloud | 상시(SaaS) | 에이전트 트레이스·평가 데이터셋 |
 
 자세한 설계와 라운드 로드맵: [전체 설계 spec](docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md) · 진행 상황: [docs/roadmap/00_status.md](docs/roadmap/00_status.md)
 
@@ -1123,7 +1124,7 @@ uv run pytest
 uv run hoa --version
 ```
 
-devcontainer를 쓰면 uv·kubectl·helm·terraform·az가 갖춰진 컨테이너에서 같은 명령을 쓴다(`.devcontainer/`).
+devcontainer(`.devcontainer/`)를 쓰면 uv·kubectl·helm·terraform·az가 갖춰진 컨테이너에서 `uv run pytest`·`uv run hoa --version`을 그대로 쓴다(`uv sync`는 컨테이너를 만들 때 끝난다). `pre-commit install`과 커밋은 호스트에서 한다 — [GIT_WORKFLOW.md](GIT_WORKFLOW.md) §개발 환경.
 
 ## 문서
 
