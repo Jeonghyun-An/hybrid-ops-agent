@@ -415,6 +415,7 @@ git commit -m "[Chore] round00 — GitHub Actions CI: 잠금 파일 그대로 �
 
 **Files:**
 - Create: `.devcontainer/devcontainer.json`
+- Create(생성됨): `.devcontainer/devcontainer-lock.json` — Step 4의 `devcontainer up`이 만든다. 기능(feature) 버전·digest를 고정하므로 `uv.lock`처럼 커밋한다.
 
 - [ ] **Step 1: 파일 없음 확인**
 
@@ -427,7 +428,9 @@ kind는 round01에서 더한다. Docker는 호스트(Docker Desktop)의 것을 �
 
 devcontainer는 작업 폴더와 `.git`을 호스트와 공유(bind mount)한다. 그래서 두 가지를 막는다.
 - 컨테이너의 venv는 `UV_PROJECT_ENVIRONMENT`로 작업 폴더 밖(`/home/vscode/.venv`)에 둔다 — 안 그러면 컨테이너의 `uv sync`가 호스트(Windows)의 `.venv`를 Linux용으로 갈아엎는다.
-- `pre-commit install`은 컨테이너에서 하지 않는다 — 공유된 `.git/hooks/pre-commit`이 컨테이너 Python 경로를 가리키게 되어 호스트 커밋이 깨진다. 대신 `remoteEnv`로 컨테이너 venv의 `bin`을 PATH 앞에 둔다. 호스트에서 설치한 훅은 컨테이너에서 호스트 Python 경로를 못 찾으면 PATH의 `pre-commit`을 쓰므로, 같은 훅이 컨테이너 안 커밋에서도 돈다.
+- `pre-commit install`은 컨테이너에서 하지 않는다 — 공유된 `.git/hooks/pre-commit`이 컨테이너 Python 경로를 가리키게 되어 호스트 커밋이 깨진다.
+
+그 밖에: `remoteEnv`로 컨테이너 venv의 `bin`을 PATH 앞에 둬 컨테이너 셸에서 `uv run` 없이도 `hoa`·`pytest`·`pre-commit`을 부른다. Windows 호스트의 작업 폴더는 컨테이너 안에서 소유자가 달라 git이 `dubious ownership`으로 멈추므로 `postCreateCommand`에서 `safe.directory`에 작업 폴더를 등록한다(`git status`·`pre-commit run` 같은 git 기반 도구가 컨테이너에서 돈다). 그래도 Windows 호스트에서는 **커밋은 호스트에서** 한다 — 호스트에서 설치한 훅 스크립트가 CRLF라 컨테이너에서 실행되지 않는다(recurring-gotchas 3번).
 
 이미지는 현재 메이저(`3-`) 태그를 쓴다. `1-3.12-bookworm`은 1번대에서 멈춘 태그라 서명 키가 만료된 Yarn apt 저장소가 남아 있어, 기능(feature) 설치의 `apt-get update`가 실패한다(recurring-gotchas 2번). uv는 `pipx`로 설치한다 — 이 이미지의 `pipx` 설치 경로(`/usr/local/py-utils/bin`)는 PATH에 있지만 `pip install --user`의 `~/.local/bin`은 `postCreateCommand` 시점 PATH에 없다.
 
@@ -447,7 +450,7 @@ devcontainer는 작업 폴더와 `.git`을 호스트와 공유(bind mount)한다
   "remoteEnv": {
     "PATH": "/home/vscode/.venv/bin:${containerEnv:PATH}"
   },
-  "postCreateCommand": "pipx install uv && uv sync",
+  "postCreateCommand": "pipx install uv && uv sync && git config --global --add safe.directory ${containerWorkspaceFolder}",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -475,7 +478,7 @@ Docker Desktop이 켜져 있을 때:
 Run: `npx -y @devcontainers/cli up --workspace-folder .`
 Expected: 마지막 줄 JSON에 `"outcome":"success"`. 이어서
 `npx -y @devcontainers/cli exec --workspace-folder . uv run hoa --version` → `hoa 0.0.0`.
-`npx -y @devcontainers/cli exec --workspace-folder . sh -c 'git status --short && .git/hooks/pre-commit'` → 변경 없음, 훅이 PATH의 `pre-commit`으로 돌아 오류 없이 끝난다(스테이징된 파일이 없으면 모두 `Skipped`).
+`npx -y @devcontainers/cli exec --workspace-folder . sh -c 'git status --short && pre-commit run check-yaml --all-files'` → git이 소유자 문제 없이 돌고(`.devcontainer/devcontainer-lock.json` 외 변경 없음 — 특히 `uv.lock`이 바뀌지 않는다), `check yaml...Passed`.
 
 확인 뒤 `up` 출력 JSON의 `containerId` 값으로 이 컨테이너만 지운다: `docker rm -f <containerId>`.
 호스트의 `.venv/pyvenv.cfg`와 `.git/hooks/pre-commit`의 `INSTALL_PYTHON`이 기동 전과 같고 `uv run pytest`가 통과하는지 다시 본다.
@@ -484,7 +487,7 @@ Docker Desktop이 꺼져 있어 못 했다면 완료노트 「이월」에 "devc
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add .devcontainer/devcontainer.json
+git add .devcontainer/devcontainer.json .devcontainer/devcontainer-lock.json
 git commit -m "[Chore] round00 — devcontainer: Python 3.12 + uv + kubectl·helm·terraform·az, Docker 는 호스트 것을 쓴다. venv 는 작업 폴더 밖에 두고 훅은 호스트에서만 설치해 호스트 .venv·git 훅을 덮어쓰지 않는다"
 ```
 
@@ -645,7 +648,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 | Azure AKS | 작업할 때만 켜는 클라우드 클러스터 | round03 |
 
 - Python: `uv sync` → `uv run pytest`. Python 버전은 `.python-version`(3.12)에 맞춰 uv가 준비한다.
-- devcontainer는 작업 폴더와 `.git`을 호스트와 공유한다. 그래서 컨테이너의 venv는 작업 폴더 밖(`/home/vscode/.venv`, `UV_PROJECT_ENVIRONMENT`)에 두고, `pre-commit install`은 호스트에서만 한다 — 컨테이너에서 하면 공유된 훅이 컨테이너 Python을 가리켜 호스트 커밋이 깨진다. 컨테이너 안 커밋에서는 PATH에 올린 컨테이너 venv의 `pre-commit`으로 같은 훅이 돈다.
+- devcontainer는 작업 폴더와 `.git`을 호스트와 공유한다. 그래서 컨테이너의 venv는 작업 폴더 밖(`/home/vscode/.venv`, `UV_PROJECT_ENVIRONMENT`)에 두고, `pre-commit install`은 호스트에서만 한다 — 컨테이너에서 하면 공유된 훅이 컨테이너 Python을 가리켜 호스트 커밋이 깨진다. Windows 호스트에서는 커밋도 호스트에서 한다 — 호스트에서 설치한 훅 스크립트가 CRLF라 컨테이너에서 실행되지 않는다(`docs/ops/recurring-gotchas.md` 3번).
 - 각 환경의 세부 절차(설치·접속·기동/정지)는 그 환경이 들어오는 라운드에 이 절에 더한다.
 
 ## 개발 가이드 문서 (필수)
@@ -781,7 +784,7 @@ Expected: `No such file or directory`
 
 - [ ] **Step 2: 작성**
 
-Task 3에서 gitleaks 훅은 Go가 없어도 pre-commit이 툴체인을 직접 받아 그대로 돌았으므로 gitleaks 항목은 없다. Task 5 Step 4 스모크에서 실제로 겪은 devcontainer 이미지 빌드 실패를 2번으로 싣는다.
+Task 3에서 gitleaks 훅은 Go가 없어도 pre-commit이 툴체인을 직접 받아 그대로 돌았으므로 gitleaks 항목은 없다. Task 5 Step 4 스모크에서 실제로 겪은 devcontainer 이미지 빌드 실패를 2번, Windows 호스트와 작업 폴더를 공유해서 생긴 컨테이너 git 문제를 3번으로 싣는다.
 
 ```markdown
 # 반복 함정 (Recurring Gotchas)
@@ -805,18 +808,26 @@ Task 3에서 gitleaks 훅은 Go가 없어도 pre-commit이 툴체인을 직접 �
 - **원인**: 이미지 태그 `mcr.microsoft.com/devcontainers/python:1-3.12-bookworm`은 이미지 1번대에서 갱신이 멈춘 태그라, 서명 키가 만료된 Yarn apt 저장소(`/etc/apt/sources.list.d/yarn.list`)가 남아 있다. 기능 설치 스크립트의 `apt-get update`가 이 저장소에서 실패한다.
 - **해결**: 현재 메이저 태그 `3-3.12-bookworm`을 쓴다(Yarn 저장소가 없다).
 - **재발 방지**: devcontainer 이미지는 현재 메이저 태그를 쓴다. 태그를 바꿀 때는 `docker run --rm --entrypoint sh <이미지> -c 'ls /etc/apt/sources.list.d/'`로 남아 있는 서드파티 저장소를 먼저 보고, `npx -y @devcontainers/cli up --workspace-folder .`로 실제 기동까지 확인한다.
+
+## 3. Windows 호스트와 공유한 작업 폴더에서 컨테이너 git이 멈추고 훅이 안 돎
+
+- **날짜**: 2026-11-09 (round00)
+- **증상**: devcontainer 안에서 `git status`가 `fatal: detected dubious ownership in repository at '/workspaces/hybrid-ops-agent'`로 멈춘다. `safe.directory`로 넘겨도 `.git/hooks/pre-commit` 실행이 `not found`(종료 코드 127)로 실패한다.
+- **원인**: (1) Windows 호스트의 작업 폴더는 bind mount 안에서 컨테이너 사용자(`vscode`)와 소유자가 달라, git의 소유자 검사가 저장소를 거부한다. (2) `.git/hooks`는 추적되지 않는 파일이라 `.gitattributes`가 적용되지 않는데, 호스트(Windows)의 pre-commit이 훅 스크립트를 CRLF로 쓴다. 첫 줄 `#!/bin/sh`의 `` 때문에 Linux가 인터프리터를 찾지 못한다(Git Bash는 이를 견딘다).
+- **해결**: `postCreateCommand`에서 `git config --global --add safe.directory ${containerWorkspaceFolder}`로 작업 폴더를 등록한다. 커밋은 호스트에서 한다 — 컨테이너에서 `pre-commit install`로 훅을 다시 쓰면 이번엔 호스트 커밋이 깨진다(훅이 컨테이너 Python 경로를 가리킨다).
+- **재발 방지**: 컨테이너는 도구(uv·kubectl·helm·terraform·az)와 테스트·`pre-commit run`용으로 쓰고, `git commit`은 호스트에서 한다(`GIT_WORKFLOW.md` §개발 환경). 컨테이너의 venv는 `UV_PROJECT_ENVIRONMENT`로 작업 폴더 밖에 둬서 호스트 `.venv`를 건드리지 않는다.
 ```
 
 - [ ] **Step 3: 구조 확인**
 
 Run: `grep -c '^## [0-9]' docs/ops/recurring-gotchas.md`
-Expected: `2`
+Expected: `3`
 
 - [ ] **Step 4: 커밋**
 
 ```bash
 git add docs/ops/recurring-gotchas.md
-git commit -m "[Docs] round00 — 반복 함정 문서를 열고 1번(Windows autocrlf 로 LF→CRLF 경고, .gitattributes eol=lf 로 해결)·2번(devcontainer 1번대 이미지의 만료된 Yarn 키로 빌드 실패, 3번대 태그로 해결)을 기록한다"
+git commit -m "[Docs] round00 — 반복 함정 문서를 열고 1번(Windows autocrlf 로 LF→CRLF 경고, .gitattributes eol=lf 로 해결)·2번(devcontainer 1번대 이미지의 만료된 Yarn 키로 빌드 실패, 3번대 태그로 해결)·3번(Windows 호스트 공유 폴더에서 컨테이너 git 소유자 거부·CRLF 훅, safe.directory 와 호스트 커밋으로 해결)을 기록한다"
 ```
 
 ---
