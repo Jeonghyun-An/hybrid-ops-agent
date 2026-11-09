@@ -716,15 +716,16 @@ Expected: `No such file or directory`
 
 ## 외부 호출 격리
 
-- LLM 호출은 멤버마다 한 모듈(`llm.py`)을 거친다. 로컬 vLLM과 Azure OpenAI가 모두 OpenAI 호환 API라 클라이언트 하나를 설정으로 바꿔 쓴다. 그래프 노드·도구 코드가 HTTP 클라이언트를 직접 만들지 않는다.
+- LLM 호출은 멤버마다 한 모듈(`llm.py`)을 거친다. 로컬 vLLM과 Azure OpenAI가 모두 OpenAI 호환 API라 클라이언트 하나를 설정으로 바꿔 쓰고, 역할(triage·diagnose·extract 등)마다 어느 모델을 쓸지도 `llm.py`가 정한다. 그래프 노드·도구 코드가 HTTP 클라이언트를 직접 만들지 않는다.
+- LLM을 쓰는 멤버(`agent`·`graphrag`·`eval`)가 각자 `llm.py`를 두는 중복은 허용한다(멤버 경계를 지키는 값). 공용 멤버로 뺄지는 두 번째 멤버가 LLM을 쓰기 시작하는 라운드에 정한다.
 - LLM 클라이언트는 주입받는다(모듈 전역에서 생성하지 않는다) — 테스트에서 가짜 LLM으로 바꿔 끼우기 위해서다.
-- 쿠버네티스 API 호출은 MCP 서버 안에서만 한다. 에이전트는 클러스터를 MCP 도구로만 만진다.
+- 에이전트(`agent`)는 클러스터를 MCP 도구로만 만진다. 쿠버네티스 API 클라이언트는 MCP 서버(`mcp_servers`) 안에 두고, 예외는 에이전트가 아닌 두 곳뿐이다 — `graphrag` 구조 층 동기화 잡(읽기 전용 ServiceAccount)과 `eval` 러너의 장애 주입·복구(데모 네임스페이스 한정).
 
 ## 타입·데이터
 
 - 모든 함수 인자·반환에 타입힌트를 단다. `list[str]`·`X | None` 같은 최신 문법을 쓴다.
 - 경계 데이터(LangGraph 상태, MCP 도구 입출력, API 요청·응답, 평가 시나리오)는 Pydantic v2 모델로 정의한다. 경계를 넘는 bare `dict`는 쓰지 않는다.
-- I/O는 `async def`로 쓴다.
+- 네트워크 I/O(LLM·MCP·DB·HTTP·k8s API)는 `async def`로 쓴다. CLI 진입점(`main`)은 동기로 두고 필요하면 `asyncio.run`으로 감싼다.
 
 ## 주석·docstring
 
