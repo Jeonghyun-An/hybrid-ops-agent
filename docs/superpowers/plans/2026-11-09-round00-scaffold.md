@@ -430,7 +430,7 @@ devcontainer는 작업 폴더와 `.git`을 호스트와 공유(bind mount)한다
 - 컨테이너의 venv는 `UV_PROJECT_ENVIRONMENT`로 작업 폴더 밖(`/home/vscode/.venv`)에 둔다 — 안 그러면 컨테이너의 `uv sync`가 호스트(Windows)의 `.venv`를 Linux용으로 갈아엎는다.
 - `pre-commit install`은 컨테이너에서 하지 않는다 — 공유된 `.git/hooks/pre-commit`이 컨테이너 Python 경로를 가리키게 되어 호스트 커밋이 깨진다.
 
-그 밖에: `remoteEnv`로 컨테이너 venv의 `bin`을 PATH 앞에 둬 컨테이너 셸에서 `uv run` 없이도 `hoa`·`pytest`·`pre-commit`을 부른다. Windows 호스트의 작업 폴더는 컨테이너 안에서 소유자가 달라 git이 `dubious ownership`으로 멈추므로 `postCreateCommand`에서 `safe.directory`에 작업 폴더를 등록한다(`git status`·`pre-commit run` 같은 git 기반 도구가 컨테이너에서 돈다). 그래도 Windows 호스트에서는 **커밋은 호스트에서** 한다 — 호스트에서 설치한 훅 스크립트가 CRLF라 컨테이너에서 실행되지 않는다(recurring-gotchas 3번).
+그 밖에: `remoteEnv`로 컨테이너 venv의 `bin`을 PATH 앞에 둬 컨테이너 셸에서 `uv run` 없이도 `hoa`·`pytest`·`pre-commit`을 부른다. Windows 호스트의 작업 폴더는 컨테이너 안에서 소유자가 달라 git이 `dubious ownership`으로 멈추므로 `postCreateCommand` 맨 앞에서 `safe.directory`에 작업 폴더를 등록한다(`git status`·`pre-commit run` 같은 git 기반 도구가 컨테이너에서 돈다). 사용자 설정(`--global`)이 아니라 시스템 설정(`--system`, `/etc/gitconfig`)에 쓰는 것은 VS Code가 호스트 `~/.gitconfig`를 컨테이너로 복사해 넣어도 덮이지 않게 하기 위해서고, 맨 앞에 두는 것은 뒤 단계(`uv sync`)가 실패해도 git은 쓸 수 있게 하기 위해서다. VS Code Python 확장은 작업 폴더 밖의 venv를 스스로 찾지 못할 수 있어 `python.defaultInterpreterPath`로 알려 준다. 그래도 Windows 호스트에서는 **커밋은 호스트에서** 한다 — 호스트에서 설치한 훅 스크립트가 CRLF라 컨테이너에서 실행되지 않는다(recurring-gotchas 3번).
 
 이미지는 현재 메이저(`3-`) 태그를 쓴다. `1-3.12-bookworm`은 1번대에서 멈춘 태그라 서명 키가 만료된 Yarn apt 저장소가 남아 있어, 기능(feature) 설치의 `apt-get update`가 실패한다(recurring-gotchas 2번). uv는 `pipx`로 설치한다 — 이 이미지의 `pipx` 설치 경로(`/usr/local/py-utils/bin`)는 PATH에 있지만 `pip install --user`의 `~/.local/bin`은 `postCreateCommand` 시점 PATH에 없다.
 
@@ -450,9 +450,12 @@ devcontainer는 작업 폴더와 `.git`을 호스트와 공유(bind mount)한다
   "remoteEnv": {
     "PATH": "/home/vscode/.venv/bin:${containerEnv:PATH}"
   },
-  "postCreateCommand": "pipx install uv && uv sync && git config --global --add safe.directory ${containerWorkspaceFolder}",
+  "postCreateCommand": "sudo git config --system --replace-all safe.directory ${containerWorkspaceFolder} && pipx install uv && uv sync",
   "customizations": {
     "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/home/vscode/.venv/bin/python"
+      },
       "extensions": [
         "charliermarsh.ruff",
         "ms-python.python",
@@ -814,7 +817,7 @@ Task 3에서 gitleaks 훅은 Go가 없어도 pre-commit이 툴체인을 직접 �
 - **날짜**: 2026-11-09 (round00)
 - **증상**: devcontainer 안에서 `git status`가 `fatal: detected dubious ownership in repository at '/workspaces/hybrid-ops-agent'`로 멈춘다. `safe.directory`로 넘겨도 `.git/hooks/pre-commit` 실행이 `not found`(종료 코드 127)로 실패한다.
 - **원인**: (1) Windows 호스트의 작업 폴더는 bind mount 안에서 컨테이너 사용자(`vscode`)와 소유자가 달라, git의 소유자 검사가 저장소를 거부한다. (2) `.git/hooks`는 추적되지 않는 파일이라 `.gitattributes`가 적용되지 않는데, 호스트(Windows)의 pre-commit이 훅 스크립트를 CRLF로 쓴다. 첫 줄 `#!/bin/sh\r`의 `\r` 때문에 Linux가 인터프리터를 찾지 못한다(Git Bash는 이를 견딘다).
-- **해결**: `postCreateCommand`에서 `git config --global --add safe.directory ${containerWorkspaceFolder}`로 작업 폴더를 등록한다. 커밋은 호스트에서 한다 — 컨테이너에서 `pre-commit install`로 훅을 다시 쓰면 이번엔 호스트 커밋이 깨진다(훅이 컨테이너 Python 경로를 가리킨다).
+- **해결**: `postCreateCommand` 맨 앞에서 `sudo git config --system --replace-all safe.directory ${containerWorkspaceFolder}`로 작업 폴더를 등록한다(시스템 설정이라 VS Code가 복사해 넣는 `~/.gitconfig`에 덮이지 않는다). 커밋은 호스트에서 한다 — 컨테이너에서 `pre-commit install`로 훅을 다시 쓰면 이번엔 호스트 커밋이 깨진다(훅이 컨테이너 Python 경로를 가리킨다).
 - **재발 방지**: 컨테이너는 도구(uv·kubectl·helm·terraform·az)와 테스트·`pre-commit run`용으로 쓰고, `git commit`은 호스트에서 한다(`GIT_WORKFLOW.md` §개발 환경). 컨테이너의 venv는 `UV_PROJECT_ENVIRONMENT`로 작업 폴더 밖에 둬서 호스트 `.venv`를 건드리지 않는다.
 ```
 
