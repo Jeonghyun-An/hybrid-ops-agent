@@ -12,7 +12,7 @@
 
 - 타입(Conventional): `feat`·`fix`·`docs`·`chore`·`refactor`·`test`
 - 설명은 영문 kebab-case(예: `feat/round01-end-to-end`) — 한글 브랜치명은 Windows·CI 호환성 문제로 쓰지 않는다.
-- 서브라운드: 한 라운드가 성격이 다른 여러 덩어리로 쪼개지면 `round<NN>a`~`round<NN>f`로 표기(예: `round02a`). 접미는 성격 라벨이며 실행 순서가 아니다.
+- 서브라운드: 한 라운드가 성격이 다른 여러 덩어리로 쪼개지면 소문자 접미를 붙인다(`round02a`, `round02b`…). 접미는 성격 라벨이며 실행 순서가 아니다.
 
 ## 흐름
 
@@ -38,12 +38,14 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 - Type: `Feat`·`Fix`·`Docs`·`Chore`·`Refactor`·`Test`
 - 예) `[Feat] MCP k8s-read 서버에 events 도구 추가`, `[Fix] 평가 러너가 경보 대기 시간을 넘기면 멈추던 문제`, `[Docs] round01 교본 추가`
 - 본문은 꼭 필요할 때만 몇 줄.
+- 머지 커밋만 예외로 `Merge <브랜치> into <대상> — round<NN> (<요약>)` 형식을 쓴다(`git merge --no-ff -m`).
 - `Co-Authored-By` 트레일러와 "Generated with" 문구는 넣지 않는다(단독 저자).
 
 ## 품질 게이트 (pre-commit · CI)
 
 | 검사 | 어디서 | 들어오는 라운드 |
 |---|---|---|
+| 기본 위생(check-yaml·check-toml·파일 끝 줄바꿈·줄 끝 공백·충돌 표시·큰 파일) | pre-commit | round00 |
 | ruff check · ruff format --check | pre-commit + CI | round00 |
 | pytest | CI | round00 |
 | gitleaks | pre-commit(스테이징 변경) + CI(전체 이력) | round00 |
@@ -66,6 +68,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 | Azure AKS | 작업할 때만 켜는 클라우드 클러스터 | round03 |
 
 - Python: `uv sync` → `uv run pytest`. Python 버전은 `.python-version`(3.12)에 맞춰 uv가 준비한다.
+- GitHub CLI(`gh`)는 호스트에 설치하고 `gh auth login`한다 — CI 결과 확인과 `/round-finish`가 쓴다.
 - devcontainer는 작업 폴더와 `.git`을 호스트와 공유한다. 그래서 컨테이너의 venv는 작업 폴더 밖(`/home/vscode/.venv`, `UV_PROJECT_ENVIRONMENT`)에 두고, `pre-commit install`은 호스트에서만 한다 — 컨테이너에서 하면 공유된 훅이 컨테이너 Python을 가리켜 호스트 커밋이 깨진다. Windows 호스트에서는 커밋도 호스트에서 한다 — 호스트에서 설치한 훅 스크립트가 CRLF라 컨테이너에서 실행되지 않는다(`docs/ops/recurring-gotchas.md` 3번).
 - 각 환경의 세부 절차(설치·접속·기동/정지)는 그 환경이 들어오는 라운드에 이 절에 더한다.
 

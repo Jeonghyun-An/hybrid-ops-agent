@@ -7,6 +7,7 @@
 - Python 컴포넌트는 uv 워크스페이스 멤버 하나씩이다(`agent`·`mcp_servers`·`graphrag`·`demo_app`·`eval`). 멤버마다 컨테이너 이미지가 따로 나가므로 의존성을 섞지 않는다 — 예: MCP 서버 이미지에 LangGraph가 들어가지 않는다.
 - 멤버끼리 다른 멤버의 내부 모듈을 import하지 않는다. 공용 타입이 필요해지면 공용 멤버를 새로 만든다.
 - 레이아웃: `<멤버>/src/<import 이름>/`, 테스트는 `<멤버>/tests/`. import 이름은 `hoa_` 접두(`hoa_agent`).
+- 새 멤버를 더할 때는 루트 `pyproject.toml`의 다섯 곳을 같이 고친다 — `[tool.uv.workspace] members`·`[tool.uv.sources]`·`dependencies`·ruff `src`·pytest `testpaths`. `testpaths`를 빠뜨리면 새 멤버의 테스트가 CI에서 조용히 빠진다.
 
 ## 외부 호출 격리
 
