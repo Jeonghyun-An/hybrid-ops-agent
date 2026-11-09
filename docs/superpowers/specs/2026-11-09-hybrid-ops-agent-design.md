@@ -159,7 +159,7 @@ Python 패키지(`agent`·`mcp_servers`·`graphrag`·`demo_app`·`eval`)는 uv �
 - `CLAUDE.md` 단일 진입점, 산출물 위치 규칙(`scripts/`=재실행 도구, `research/`=1회성 실험).
 - `GIT_WORKFLOW.md`: `main`(배포 기준) / `dev`(통합) / `<type>/round<NN>-<설명>`(작업), 영문 kebab-case 브랜치명, 작업 브랜치 → dev 머지와 dev → main 머지는 매번 사용자 승인.
 - 커밋 메시지 `[Type] 한국어 설명`, `Co-Authored-By` 트레일러 없음.
-- 라운드 생애주기: 브레인스토밍 spec → writing-plans plan → TDD 구현 → 단위 테스트 + 수동 스모크 → code-reviewer 서브에이전트 정적 리뷰 → 승인 머지 → 완료노트·`00_status.md` → `/round-finish`.
+- 라운드 생애주기: 브레인스토밍 spec → writing-plans plan → TDD 구현 → code-reviewer 서브에이전트 정적 리뷰 → 단위 테스트(CI) + 수동 스모크 → 교본·완료노트·`00_status.md` → 승인 머지(`dev`) → `/round-finish`(`dev→main`).
 - 교본: 라운드마다 `docs/guides/round<NN>/`에 1권, 전체 코드 수록(발췌·플레이스홀더 금지) + 면접 Q&A.
 - `docs/ops/recurring-gotchas.md`(라이브에서만 드러나는 함정), `docs/standards/coding-standard.md`.
 
