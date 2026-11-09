@@ -167,7 +167,7 @@ Python 패키지(`agent`·`mcp_servers`·`graphrag`·`demo_app`·`eval`)는 uv �
 - 배포가 GitOps라 "main = 배포 기준"이 문자 그대로가 된다. Argo CD가 `main`을 본다. `dev`는 CI(kind 통합 테스트)로만 검증한다.
 - `GIT_WORKFLOW.md`의 개발 환경 절은 kind / k3s / AKS 기준으로 새로 쓴다(docker compose·Portainer 내용은 가져오지 않는다).
 - code-reviewer 에이전트에 인프라 점검을 더한다: Terraform plan 변화, RBAC 최소 권한, 비밀값 커밋 여부, 이미지 태그 고정.
-- CI 게이트: ruff, pytest, gitleaks, `terraform fmt -check`·`terraform validate`, `helm lint`, kubeconform.
+- CI 게이트: ruff, pytest, gitleaks(round00), `helm lint`·kubeconform(round02), `terraform fmt -check`·`terraform validate`(round03). 검사 대상 파일이 처음 생기는 라운드에 그 게이트를 더한다 — 대상 없는 검사는 아무것도 증명하지 못한다.
 - 개발 PC가 바뀌어도 되도록 개발 환경은 uv + devcontainer로 재현한다.
 
 ## 9. 안전·테스트·비용
