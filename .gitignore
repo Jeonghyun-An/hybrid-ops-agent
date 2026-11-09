@@ -5,9 +5,11 @@
 *.agekey
 keys.txt
 kubeconfig
+!kubeconfig/
 kubeconfig*.yaml
 kubeconfig*.yml
 *.kubeconfig
+k3s.yaml
 
 # Python
 __pycache__/

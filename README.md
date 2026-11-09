@@ -27,7 +27,7 @@
 
 ## 시작하기
 
-[uv](https://docs.astral.sh/uv/)가 필요하다(Python 3.12는 uv가 준비한다). CI 결과 확인과 라운드 종료 절차에는 [GitHub CLI](https://cli.github.com/)(`gh auth login`)를 쓴다.
+[uv](https://docs.astral.sh/uv/) 0.11(0.11.31 이상 — `pyproject.toml`의 `[tool.uv] required-version`)이 필요하다(Python 3.12는 uv가 준비한다). CI 결과 확인과 라운드 종료 절차에는 [GitHub CLI](https://cli.github.com/)(`gh auth login`)를 쓴다.
 
 ```bash
 uv sync

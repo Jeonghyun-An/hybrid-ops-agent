@@ -76,7 +76,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 
 - 1 라운드 = 1 교본(가이드). `docs/guides/round<NN>/`에 저장(템플릿: `docs/guides/_TEMPLATE.md`).
 - 구성: paraphrase된 라운드 프롬프트 → 전 코드/문서 클론코딩 가능하게 수록(발췌·플레이스홀더 금지) → 면접식 Q&A.
-- 리뷰 흐름: 작업 브랜치 push → 교본↔실제 파일 대조(스크립트로 기계 대조한 뒤 `.claude/agents/code-reviewer.md`로 한 번 더 — 리뷰어는 git을 실행하지 않으므로 대조할 파일 목록은 호출하는 쪽이 넘긴다) → 승인 → `dev` 머지.
+- 리뷰 흐름: 작업 브랜치 push → 교본↔실제 파일 대조(교본의 코드블록을 뽑아 실제 파일과 diff한다 — 제목 수만 세지 않는다. 그다음 `.claude/agents/code-reviewer.md`로 한 번 더 본다. 리뷰어는 git을 실행하지 않으므로 대조할 파일 목록은 호출하는 쪽이 넘긴다) → 승인 → `dev` 머지.
 
 ## 라운드 생애주기
 
@@ -86,7 +86,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 4. 리뷰: `.claude/agents/code-reviewer.md` 서브에이전트로 정적 리뷰 → 발견 처리(§머지 승인 규칙).
 5. 검증: CI green + 관련 기능 수동 스모크(round01부터 평가 러너 시나리오 포함).
 6. 문서: 작업 브랜치에서 교본(`docs/guides/round<NN>/`)·완료노트(`docs/roadmap/round<NN>-완료노트.md`, 템플릿 `docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md`)를 쓰고 `docs/roadmap/00_status.md`를 갱신 → 교본 대조 리뷰(§개발 가이드 문서).
-7. 머지: 사용자 승인 → 작업 브랜치를 `dev`에 `--no-ff` 머지·push → `dev`에서 완료노트 「상태」의 `dev` 머지 승인 줄을 체크·커밋.
+7. 머지: 사용자 승인 → 작업 브랜치를 `dev`에 `--no-ff` 머지·push → `dev`에서 완료노트 「상태」의 `dev` 머지 승인 줄을 체크·커밋·push(`dev` CI).
 8. 라운드 종료: 사용자 승인 → `/round-finish` 스킬로 `dev→main` 머지 + `origin` push → `dev`에서 완료노트 마지막 줄을 체크·커밋해 `dev`에만 push(다음 라운드 머지 때 `main`에 함께 올라간다).
 
 ## 비고
