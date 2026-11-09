@@ -9,5 +9,5 @@ dependencies = []
 hoa = "hoa_agent.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"

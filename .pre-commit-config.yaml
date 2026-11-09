@@ -1,4 +1,4 @@
-# 커밋 직전 검사. ruff rev 는 pyproject.toml dev 그룹의 ruff 버전과 맞춘다.
+# 커밋 직전 검사. ruff rev 는 pyproject.toml dev 그룹의 ruff 버전과, gitleaks rev 는 .github/workflows/ci.yml 의 gitleaks 다운로드 버전과 맞춘다.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

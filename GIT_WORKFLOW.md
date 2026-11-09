@@ -52,7 +52,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 - 검사는 그 파일 종류가 처음 생기는 라운드에 더한다 — 대상 없는 검사는 아무것도 증명하지 못한다.
 - `terraform apply`는 CI에서 돌리지 않는다. 로컬에서 사용자 승인 뒤 손으로만 한다.
 - 클론한 뒤 한 번(호스트에서): `uv run pre-commit install`. devcontainer 안에서는 하지 않는다(§개발 환경).
-- ruff 버전은 `pyproject.toml` dev 그룹과 `.pre-commit-config.yaml` rev를 같이 올린다.
+- 두 곳에 적힌 도구 버전은 같이 올린다: ruff는 `pyproject.toml` dev 그룹과 `.pre-commit-config.yaml` rev, gitleaks는 `.pre-commit-config.yaml` rev와 `.github/workflows/ci.yml` 다운로드 URL. uv는 `pyproject.toml`의 `[tool.uv] required-version`이 정본이다 — CI(setup-uv)는 이 값을 읽고, devcontainer `postCreateCommand`의 `pipx install` 버전 범위는 손으로 맞춘다.
 
 ## 개발 환경
 
