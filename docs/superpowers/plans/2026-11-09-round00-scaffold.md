@@ -26,12 +26,12 @@
 - Create: `.gitattributes`
 - Create: `.gitignore`
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls .gitattributes .gitignore 2>&1`
 Expected: 두 파일 모두 `No such file or directory`
 
-- [ ] **Step 2: `.gitattributes` 작성**
+- [x] **Step 2: `.gitattributes` 작성**
 
 ```gitattributes
 # 저장소 안 텍스트 파일은 작업 사본에서도 LF로 고정한다 — Windows 전역 core.autocrlf=true 를 이긴다(recurring-gotchas 1번)
@@ -42,7 +42,7 @@ Expected: 두 파일 모두 `No such file or directory`
 *.gif binary
 ```
 
-- [ ] **Step 3: `.gitignore` 작성**
+- [x] **Step 3: `.gitignore` 작성**
 
 ```gitignore
 # 비밀값 — 커밋하지 않는다(SOPS로 암호화한 파일만 예외)
@@ -87,7 +87,7 @@ dist/
 .superpowers/
 ```
 
-- [ ] **Step 4: 기존 파일 재정규화와 줄바꿈 확인**
+- [x] **Step 4: 기존 파일 재정규화와 줄바꿈 확인**
 
 Run:
 ```bash
@@ -97,7 +97,7 @@ git ls-files --eol
 ```
 Expected: 모든 줄이 `i/lf    w/lf` (spec 파일 포함). `w/crlf`가 보이면 그 파일을 `rm <파일> && git checkout -- <파일>`로 인덱스에서 다시 꺼낸 뒤 재확인(`git rm --cached`를 먼저 하면 인덱스에서 빠져 `git checkout --`이 실패한다).
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git commit -m "[Chore] round00 — 줄바꿈을 LF로 고정하고(.gitattributes) 비밀값·kubeconfig·Terraform state·빌드 산출물을 무시 목록에 넣는다"
@@ -116,13 +116,13 @@ git commit -m "[Chore] round00 — 줄바꿈을 LF로 고정하고(.gitattribute
 - Create: `agent/tests/test_cli.py`
 - Create(생성됨): `uv.lock`
 
-- [ ] **Step 1: `.python-version` 작성**
+- [x] **Step 1: `.python-version` 작성**
 
 ```text
 3.12
 ```
 
-- [ ] **Step 2: 루트 `pyproject.toml` 작성**
+- [x] **Step 2: 루트 `pyproject.toml` 작성**
 
 루트에는 `[build-system]`이 없다 — uv는 이 프로젝트 자체를 설치하지 않고 워크스페이스 멤버와 개발 도구만 맞춘다. ruff `src`는 import 정렬에서 `hoa_agent`를 우리 코드(first-party)로 보게 한다 — 멤버를 더할 때마다 그 멤버의 `src`도 더한다.
 
@@ -160,7 +160,7 @@ addopts = "--import-mode=importlib"
 testpaths = ["agent/tests"]
 ```
 
-- [ ] **Step 3: `agent/pyproject.toml` 작성**
+- [x] **Step 3: `agent/pyproject.toml` 작성**
 
 ```toml
 [project]
@@ -178,7 +178,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 ```
 
-- [ ] **Step 4: `agent/src/hoa_agent/__init__.py` 작성**
+- [x] **Step 4: `agent/src/hoa_agent/__init__.py` 작성**
 
 버전은 `agent/pyproject.toml` 한 곳에만 적고 설치 메타데이터에서 읽는다.
 
@@ -188,12 +188,12 @@ from importlib.metadata import version
 __version__ = version("hoa-agent")
 ```
 
-- [ ] **Step 5: 의존성 설치**
+- [x] **Step 5: 의존성 설치**
 
 Run: `uv sync`
 Expected: Python 3.12가 없으면 uv가 내려받고, `.venv` 생성 후 `hoa-agent`(editable)·pre-commit·pytest·ruff 설치. `uv.lock` 생성.
 
-- [ ] **Step 6: 실패하는 테스트 작성 — `agent/tests/test_cli.py`**
+- [x] **Step 6: 실패하는 테스트 작성 — `agent/tests/test_cli.py`**
 
 ```python
 import pytest
@@ -215,12 +215,12 @@ def test_no_arguments_prints_help_and_succeeds(capsys: pytest.CaptureFixture[str
     assert "usage: hoa" in capsys.readouterr().out
 ```
 
-- [ ] **Step 7: 테스트가 실패하는지 확인**
+- [x] **Step 7: 테스트가 실패하는지 확인**
 
 Run: `uv run pytest -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'hoa_agent.cli'`
 
-- [ ] **Step 8: 최소 구현 — `agent/src/hoa_agent/cli.py`**
+- [x] **Step 8: 최소 구현 — `agent/src/hoa_agent/cli.py`**
 
 ```python
 import argparse
@@ -237,22 +237,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 ```
 
-- [ ] **Step 9: 테스트 통과 확인**
+- [x] **Step 9: 테스트 통과 확인**
 
 Run: `uv run pytest -v`
 Expected: `2 passed`
 
-- [ ] **Step 10: 콘솔 스크립트 확인**
+- [x] **Step 10: 콘솔 스크립트 확인**
 
 Run: `uv run hoa --version`
 Expected: `hoa 0.0.0`
 
-- [ ] **Step 11: 린트·포맷 확인**
+- [x] **Step 11: 린트·포맷 확인**
 
 Run: `uv run ruff check . && uv run ruff format --check .`
 Expected: `All checks passed!` 와 `5 files already formatted` — ruff 0.17은 Markdown 안의 Python 코드 블록도 포맷 검사하므로 `.py` 3개(`__init__.py`·`cli.py`·`test_cli.py`)에 spec·plan `.md` 2개가 더해진다(뒤 Task에서 문서가 늘면 이 수도 는다). 포맷 차이가 있으면 `uv run ruff format .` 후 다시 확인.
 
-- [ ] **Step 12: 커밋**
+- [x] **Step 12: 커밋**
 
 ```bash
 git add .python-version pyproject.toml uv.lock agent/
@@ -266,12 +266,12 @@ git commit -m "[Feat] round00 — uv 워크스페이스(루트=개발 도구, �
 **Files:**
 - Create: `.pre-commit-config.yaml`
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls .pre-commit-config.yaml 2>&1`
 Expected: `No such file or directory`
 
-- [ ] **Step 2: 작성**
+- [x] **Step 2: 작성**
 
 ruff `rev`는 루트 `pyproject.toml` dev 그룹의 `ruff==0.17.4`와 같아야 한다(로컬 훅과 CI가 같은 판정을 내리게).
 
@@ -300,7 +300,7 @@ repos:
       - id: gitleaks
 ```
 
-- [ ] **Step 3: 훅 설치와 전체 실행**
+- [x] **Step 3: 훅 설치와 전체 실행**
 
 Run:
 ```bash
@@ -311,7 +311,7 @@ Expected: 첫 실행은 훅 환경을 만들며 오래 걸린다. 모든 훅 `Pa
 
 gitleaks 훅(`language: golang`)이 Go 툴체인을 못 구해 실패하면, 그 훅의 id를 `gitleaks-docker`(Docker Desktop 사용)로 바꾸고 다시 실행한다. 바꿨다면 그 사실을 `docs/ops/recurring-gotchas.md`(Task 9)에 2번 항목으로 기록한다.
 
-- [ ] **Step 4: 비밀값 차단이 실제로 도는지 확인**
+- [x] **Step 4: 비밀값 차단이 실제로 도는지 확인**
 
 가짜 GitHub 토큰을 실행할 때 무작위로 만든다 — 토큰 모양 문자열을 문서에 그대로 적으면 그 문서가 gitleaks에 걸린다.
 
@@ -326,7 +326,7 @@ Expected: `gitleaks...Failed` 와 `leaks found: 1`(규칙 `github-pat`). 확인 
 git rm --cached -q leak-test.txt && rm leak-test.txt
 ```
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add .pre-commit-config.yaml
@@ -341,12 +341,12 @@ git commit -m "[Chore] round00 — pre-commit 에 ruff(린트·포맷)·gitleaks
 **Files:**
 - Create: `.github/workflows/ci.yml`
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls .github 2>&1`
 Expected: `No such file or directory`
 
-- [ ] **Step 2: 작성**
+- [x] **Step 2: 작성**
 
 `secrets` 잡은 pre-commit의 gitleaks와 달리 **전체 이력**을 본다(`fetch-depth: 0`). pre-commit은 `--no-verify`나 미설치로 건너뛸 수 있어서다.
 
@@ -393,7 +393,7 @@ jobs:
         run: ./gitleaks git --redact --verbose .
 ```
 
-- [ ] **Step 3: 로컬 검증 — YAML 문법과 잠금 파일 일치**
+- [x] **Step 3: 로컬 검증 — YAML 문법과 잠금 파일 일치**
 
 Run:
 ```bash
@@ -402,7 +402,7 @@ uv sync --locked
 ```
 Expected: `check yaml...Passed`, `uv sync --locked`가 오류 없이 끝난다(잠금 파일이 pyproject와 맞음). 실제 CI 실행은 Task 15에서 push 후 확인한다.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add .github/workflows/ci.yml
@@ -417,12 +417,12 @@ git commit -m "[Chore] round00 — GitHub Actions CI: 잠금 파일 그대로 �
 - Create: `.devcontainer/devcontainer.json`
 - Create(생성됨): `.devcontainer/devcontainer-lock.json` — Step 4의 `devcontainer up`이 만든다. 기능(feature) 버전·digest를 고정하므로 `uv.lock`처럼 커밋한다.
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls .devcontainer 2>&1`
 Expected: `No such file or directory`
 
-- [ ] **Step 2: 작성**
+- [x] **Step 2: 작성**
 
 kind는 round01에서 더한다. Docker는 호스트(Docker Desktop)의 것을 쓴다(`docker-outside-of-docker`) — kind 클러스터가 호스트 Docker 위에 떠야 개발 PC 어디서든 같은 클러스터를 본다.
 
@@ -467,12 +467,12 @@ devcontainer는 작업 폴더와 `.git`을 호스트와 공유(bind mount)한다
 }
 ```
 
-- [ ] **Step 3: JSON 문법 확인**
+- [x] **Step 3: JSON 문법 확인**
 
 Run: `uv run python -c "import json; json.load(open('.devcontainer/devcontainer.json', encoding='utf-8')); print('devcontainer.json OK')"`
 Expected: `devcontainer.json OK`
 
-- [ ] **Step 4: 수동 스모크 — 컨테이너가 실제로 뜨는지**
+- [x] **Step 4: 수동 스모크 — 컨테이너가 실제로 뜨는지**
 
 Docker Desktop이 켜져 있을 때:
 
@@ -487,7 +487,7 @@ Expected: 마지막 줄 JSON에 `"outcome":"success"`. 이어서
 호스트의 `.venv/pyvenv.cfg`와 `.git/hooks/pre-commit`의 `INSTALL_PYTHON`이 기동 전과 같고 `uv run pytest`가 통과하는지 다시 본다.
 Docker Desktop이 꺼져 있어 못 했다면 완료노트 「이월」에 "devcontainer 실제 기동 미확인"으로 적는다.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add .devcontainer/devcontainer.json .devcontainer/devcontainer-lock.json
@@ -501,12 +501,12 @@ git commit -m "[Chore] round00 — devcontainer: Python 3.12 + uv + kubectl·hel
 **Files:**
 - Create: `CLAUDE.md`
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls CLAUDE.md 2>&1`
 Expected: `No such file or directory`
 
-- [ ] **Step 2: 작성**
+- [x] **Step 2: 작성**
 
 ```markdown
 # CLAUDE.md — 개발 운영 진입점
@@ -558,12 +558,12 @@ Expected: `No such file or directory`
 | 프로젝트 소개·시작하기 | `README.md` |
 ```
 
-- [ ] **Step 3: 구조 확인**
+- [x] **Step 3: 구조 확인**
 
 Run: `grep -c '^## ' CLAUDE.md && grep -o '`[^`]*\.md`' CLAUDE.md | sort -u`
 Expected: 섹션 수 `6`. 나열된 `.md` 경로 중 `docs/roadmap/round<NN>-완료노트.md` 같은 패턴 경로를 뺀 나머지는 이 plan의 Task 6~14에서 만드는 파일이거나 이미 있는 spec이다.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add CLAUDE.md
@@ -577,12 +577,12 @@ git commit -m "[Docs] round00 — CLAUDE.md: NL-Lib 진입점 구조를 옮기�
 **Files:**
 - Create: `GIT_WORKFLOW.md`
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls GIT_WORKFLOW.md 2>&1`
 Expected: `No such file or directory`
 
-- [ ] **Step 2: 작성**
+- [x] **Step 2: 작성**
 
 ````markdown
 # Git Workflow
@@ -677,12 +677,12 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 - 실행해서 파일을 만들어내는 1회성 스크립트는 대응하는 `research/<주제>/`에 산출물과 함께 둔다(`CLAUDE.md` §2).
 ````
 
-- [ ] **Step 3: 구조 확인**
+- [x] **Step 3: 구조 확인**
 
 Run: `grep '^## ' GIT_WORKFLOW.md`
 Expected: `브랜치 모델`·`흐름`·`머지 승인 규칙`·`커밋 메시지`·`품질 게이트 (pre-commit · CI)`·`개발 환경`·`개발 가이드 문서 (필수)`·`라운드 생애주기`·`비고` 9개.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add GIT_WORKFLOW.md
@@ -696,12 +696,12 @@ git commit -m "[Docs] round00 — GIT_WORKFLOW.md: 브랜치·승인·커밋 규
 **Files:**
 - Create: `docs/standards/coding-standard.md`
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls docs/standards 2>&1`
 Expected: `No such file or directory`
 
-- [ ] **Step 2: 작성**
+- [x] **Step 2: 작성**
 
 ```markdown
 # 코딩 표준
@@ -763,12 +763,12 @@ Expected: `No such file or directory`
 - 없음.
 ```
 
-- [ ] **Step 3: 구조 확인**
+- [x] **Step 3: 구조 확인**
 
 Run: `grep '^## ' docs/standards/coding-standard.md`
 Expected: `패키지 경계`·`외부 호출 격리`·`타입·데이터`·`주석·docstring`·`에러 처리`·`테스트`·`쿠버네티스·인프라`·`네이밍`·`백로그` 9개.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add docs/standards/coding-standard.md
@@ -782,12 +782,12 @@ git commit -m "[Docs] round00 — 코딩 표준: 워크스페이스 멤버 경�
 **Files:**
 - Create: `docs/ops/recurring-gotchas.md`
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls docs/ops 2>&1`
 Expected: `No such file or directory`
 
-- [ ] **Step 2: 작성**
+- [x] **Step 2: 작성**
 
 Task 3에서 gitleaks 훅은 Go가 없어도 pre-commit이 툴체인을 직접 받아 그대로 돌았으므로 gitleaks 항목은 없다. Task 5 Step 4 스모크에서 실제로 겪은 devcontainer 이미지 빌드 실패를 2번, Windows 호스트와 작업 폴더를 공유해서 생긴 컨테이너 git 문제를 3번으로 싣는다.
 
@@ -823,12 +823,12 @@ Task 3에서 gitleaks 훅은 Go가 없어도 pre-commit이 툴체인을 직접 �
 - **재발 방지**: 컨테이너는 도구(uv·kubectl·helm·terraform·az)와 테스트·`pre-commit run`용으로 쓰고, `git commit`은 호스트에서 한다(`GIT_WORKFLOW.md` §개발 환경). 컨테이너의 venv는 `UV_PROJECT_ENVIRONMENT`로 작업 폴더 밖에 둬서 호스트 `.venv`를 건드리지 않는다.
 ```
 
-- [ ] **Step 3: 구조 확인**
+- [x] **Step 3: 구조 확인**
 
 Run: `grep -c '^## [0-9]' docs/ops/recurring-gotchas.md`
 Expected: `3`
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add docs/ops/recurring-gotchas.md
@@ -845,12 +845,12 @@ git commit -m "[Docs] round00 — 반복 함정 문서를 열고 1번(Windows au
 
 NL-Lib 템플릿에서 「디자인 참조」(이 프로젝트엔 디자인 트랙이 없다)를 빼고, 「수치」와 「Azure 비용」을 더한다.
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls docs/roadmap docs/guides 2>&1`
 Expected: 두 폴더 모두 `No such file or directory`
 
-- [ ] **Step 2: `docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md` 작성**
+- [x] **Step 2: `docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md` 작성**
 
 ```markdown
 # round<NN> 완료노트
@@ -891,7 +891,7 @@ plan: `docs/superpowers/plans/<파일>`
 - [ ] `dev→main` 머지 + push 완료
 ```
 
-- [ ] **Step 3: `docs/guides/_TEMPLATE.md` 작성**
+- [x] **Step 3: `docs/guides/_TEMPLATE.md` 작성**
 
 ````markdown
 # round<NN> 교본 — <제목>
@@ -922,12 +922,12 @@ plan: `docs/superpowers/plans/<파일>`
 A. <답변>
 ````
 
-- [ ] **Step 4: 구조 확인**
+- [x] **Step 4: 구조 확인**
 
 Run: `grep '^## ' docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md docs/guides/_TEMPLATE.md`
 Expected: 완료노트 7개(`한 일`·`결정`·`수치`·`Azure 비용`·`이월`·`다음 라운드 진입점`·`상태`), 교본 5개(`0.`~`4.`).
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md docs/guides/_TEMPLATE.md
@@ -941,12 +941,12 @@ git commit -m "[Docs] round00 — 완료노트·교본 템플릿: NL-Lib 구성�
 **Files:**
 - Create: `.claude/agents/code-reviewer.md`
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls .claude 2>&1`
 Expected: `No such file or directory`
 
-- [ ] **Step 2: 작성**
+- [x] **Step 2: 작성**
 
 ```markdown
 ---
@@ -982,12 +982,12 @@ model: opus
 - 동작을 막는 high는 맨 앞에. 요약 1~2문장 + 결함 목록.
 ```
 
-- [ ] **Step 3: frontmatter 확인**
+- [x] **Step 3: frontmatter 확인**
 
 Run: `head -5 .claude/agents/code-reviewer.md`
 Expected: `---` / `name: code-reviewer` / `description: ...` / `tools: Read, Grep, Glob` / `model: opus`
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add .claude/agents/code-reviewer.md
@@ -1001,12 +1001,12 @@ git commit -m "[Docs] round00 — code-reviewer 에이전트: NL-Lib 형식을 �
 **Files:**
 - Create: `.claude/skills/round-finish/SKILL.md`
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls .claude/skills 2>&1`
 Expected: `No such file or directory`
 
-- [ ] **Step 2: 작성**
+- [x] **Step 2: 작성**
 
 ````markdown
 ---
@@ -1059,12 +1059,12 @@ description: hybrid-ops-agent 라운드를 종료할 때 사용 — dev에 머�
 - round02에서 Argo CD가 들어오면 이 절차에 "push 뒤 Argo CD 동기화 상태 확인" 단계를 더한다.
 ````
 
-- [ ] **Step 3: frontmatter 확인**
+- [x] **Step 3: frontmatter 확인**
 
 Run: `head -4 .claude/skills/round-finish/SKILL.md`
 Expected: `---` / `name: round-finish` / `description: hybrid-ops-agent 라운드를 종료할 때 사용 ...` / `---`
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add .claude/skills/round-finish/SKILL.md
@@ -1078,12 +1078,12 @@ git commit -m "[Docs] round00 — round-finish 스킬: NL-Lib 종료 절차를 �
 **Files:**
 - Create: `README.md`
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls README.md 2>&1`
 Expected: `No such file or directory`
 
-- [ ] **Step 2: 작성**
+- [x] **Step 2: 작성**
 
 ````markdown
 # hybrid-ops-agent
@@ -1133,12 +1133,12 @@ devcontainer(`.devcontainer/`)를 쓰면 uv·kubectl·helm·terraform·az가 갖
 - [docs/standards/coding-standard.md](docs/standards/coding-standard.md) — 코딩 표준
 ````
 
-- [ ] **Step 3: 링크 대상 확인**
+- [x] **Step 3: 링크 대상 확인**
 
 Run: `for p in docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md CLAUDE.md GIT_WORKFLOW.md docs/standards/coding-standard.md .devcontainer; do ls -d "$p" >/dev/null && echo "OK $p"; done`
 Expected: 5줄 모두 `OK`. (`docs/roadmap/00_status.md`는 Task 14에서 만든다.)
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add README.md
@@ -1152,12 +1152,12 @@ git commit -m "[Docs] round00 — README: 프로젝트 소개·학습 대상 기
 **Files:**
 - Create: `docs/roadmap/00_status.md`
 
-- [ ] **Step 1: 파일 없음 확인**
+- [x] **Step 1: 파일 없음 확인**
 
 Run: `ls docs/roadmap/00_status.md 2>&1`
 Expected: `No such file or directory`
 
-- [ ] **Step 2: 작성**
+- [x] **Step 2: 작성**
 
 ```markdown
 # 현재 상태 · 다음 할 일
@@ -1178,7 +1178,7 @@ Expected: `No such file or directory`
 | round00 | 저장소 골격 + 라운드 방식 이식 | 진행 중 |
 ```
 
-- [ ] **Step 3: 커밋**
+- [x] **Step 3: 커밋**
 
 ```bash
 git add docs/roadmap/00_status.md
@@ -1191,7 +1191,7 @@ git commit -m "[Docs] round00 — 00_status: 현재 상태(round00 진행 중)·
 
 public 저장소에 처음 올리는 단계다. 시작 전에 사용자에게 "로컬 검증이 끝났으니 `main`·`dev`·`feat/round00-scaffold`를 push해도 되는지" 묻고 승인을 받는다.
 
-- [ ] **Step 1: 로컬 전체 검증**
+- [x] **Step 1: 로컬 전체 검증**
 
 Run:
 ```bash
