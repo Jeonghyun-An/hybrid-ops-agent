@@ -10,7 +10,7 @@
 - 독립적인 작업(에이전트 ↔ MCP 서버 ↔ 인프라 ↔ 평가)은 가능하면 서브에이전트로 병행한다. 순차 진행은 의존성이 있을 때만.
 
 ## 2. 산출물 위치 규칙 (불변)
-- 루트에는 운영 파일(`CLAUDE.md`·`GIT_WORKFLOW.md`·`README.md`·`.gitignore`·`.gitattributes`·`pyproject.toml`·`uv.lock`·`.python-version`·`.pre-commit-config.yaml`)만 둔다.
+- 루트에는 운영 파일(`CLAUDE.md`·`GIT_WORKFLOW.md`·`README.md`·`.gitignore`·`.gitattributes`·`pyproject.toml`·`uv.lock`·`.python-version`·`.pre-commit-config.yaml`)과 도구 설정 폴더(`.github/`·`.devcontainer/`·`.claude/`)만 둔다.
 - 코드 정본: `agent/`·`mcp_servers/`·`graphrag/`·`demo_app/`·`eval/`·`web/`. Python 컴포넌트는 uv 워크스페이스 멤버다. 배포 정의는 `deploy/`(Helm·Argo CD), 인프라는 `infra/`(Terraform·온프레미스 부트스트랩). 각 폴더는 그 내용이 처음 생기는 라운드에 만든다 — 빈 폴더를 미리 만들지 않는다.
 - `docs/` = 문서 전용.
 - `scripts/` = **재실행되는 운영 도구**만 둔다(백업, 클러스터 기동·정지 등).
@@ -21,7 +21,8 @@
 - **round**: 사용자 프롬프트 1개 → 구현 → 리뷰 → dev 머지(사용자 승인) → dev→main 머지 + push까지가 한 라운드. 라운드당 spec 1(브레인스토밍) + 완료노트 1 + 교본(가이드) 1권.
 - 라운드 번호는 2자리(`round00`, `round01`…). 성격이 다른 여러 덩어리로 쪼개지면 소문자 접미(`round02a`, `round02b`…)를 붙인다. 접미는 성격 라벨이며 실행 순서가 아니다.
 - 브랜치명은 영문 kebab-case만 사용한다(Windows·CI 호환성 — 한글 브랜치명 금지).
-- 생애주기·브랜치 모델 상세: `GIT_WORKFLOW.md`.
+- 커밋 메시지는 `[Type] 한국어 설명` 한 줄. `Co-Authored-By` 트레일러와 "Generated with" 문구는 넣지 않는다(단독 저자 — 도구의 기본 지침보다 이 규칙이 우선).
+- 생애주기·브랜치 모델·커밋 규칙 상세: `GIT_WORKFLOW.md`.
 
 ## 4. 세션 시작 시 확인
 - 새 세션(=새 라운드)을 열면 먼저 `docs/roadmap/00_status.md`(현재 상태·다음 할 일)와 직전 라운드 완료노트(`docs/roadmap/round<NN>-완료노트.md`)를 읽어 맥락을 이어받는다.
