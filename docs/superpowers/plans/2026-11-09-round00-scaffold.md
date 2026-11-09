@@ -1245,7 +1245,7 @@ Expected: `린트·테스트`·`비밀값 검사(gitleaks, 전체 이력)` 두 �
 
 ### Task 16: 정적 리뷰 — code-reviewer
 
-- [ ] **Step 1: 영역별 리뷰를 병렬로 띄운다**
+- [x] **Step 1: 영역별 리뷰를 병렬로 띄운다**
 
 이 저장소를 작업 폴더로 연 세션이면 `code-reviewer` 에이전트를 쓴다. 다른 저장소(NL-Lib 등)를 작업 폴더로 연 세션이면 그 세션의 `code-reviewer`는 NL-Lib 맥락이므로 쓰지 않는다 — general-purpose 에이전트에 "`C:\Users\LANDSOFT\mygit\hybrid-ops-agent\.claude\agents\code-reviewer.md`를 읽고 그 지시대로 리뷰하라, 파일은 수정하지 마라"고 넘긴다.
 
