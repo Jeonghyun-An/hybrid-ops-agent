@@ -13,7 +13,7 @@
   "remoteEnv": {
     "PATH": "/home/vscode/.venv/bin:${containerEnv:PATH}"
   },
-  "postCreateCommand": "pipx install uv && uv sync",
+  "postCreateCommand": "pipx install uv && uv sync && git config --global --add safe.directory ${containerWorkspaceFolder}",
   "customizations": {
     "vscode": {
       "extensions": [
