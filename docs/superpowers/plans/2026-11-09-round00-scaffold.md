@@ -6,7 +6,7 @@
 
 **Architecture:** 설정·문서 Task는 고전적 red-green TDD 대상이 아니므로 "파일 없음 확인 → 전문 작성 → 구조 검증 → 커밋"으로 간다. 코드는 `hoa` CLI 하나뿐이고 이것만 TDD로 간다. 품질 게이트는 대상 파일이 있는 것(ruff·pytest·gitleaks)만 이번 라운드에 넣고, helm·terraform 게이트는 그 파일이 생기는 라운드로 미룬다(spec §8).
 
-**Tech Stack:** uv 0.11 워크스페이스, Python 3.12, hatchling, pytest 9, ruff 0.17.4, pre-commit 4.7, gitleaks 8.30.1, GitHub Actions(checkout v7·setup-uv v10), devcontainer.
+**Tech Stack:** uv 0.11 워크스페이스, Python 3.12, hatchling, pytest 9, ruff 0.17.4, pre-commit 4.7, gitleaks 8.30.1, GitHub Actions(checkout v7·setup-uv v10.3.3), devcontainer.
 
 **spec:** `docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md` (§7 round00 행, §8 라운드 방식 이식)
 
@@ -95,7 +95,7 @@ git add .gitattributes .gitignore
 git add --renormalize .
 git ls-files --eol
 ```
-Expected: 모든 줄이 `i/lf    w/lf` (spec 파일 포함). `w/crlf`가 보이면 그 파일을 `git rm --cached <파일> && git checkout -- <파일>`로 다시 꺼낸 뒤 재확인.
+Expected: 모든 줄이 `i/lf    w/lf` (spec 파일 포함). `w/crlf`가 보이면 그 파일을 `rm <파일> && git checkout -- <파일>`로 인덱스에서 다시 꺼낸 뒤 재확인(`git rm --cached`를 먼저 하면 인덱스에서 빠져 `git checkout --`이 실패한다).
 
 - [ ] **Step 5: 커밋**
 
@@ -250,7 +250,7 @@ Expected: `hoa 0.0.0`
 - [ ] **Step 11: 린트·포맷 확인**
 
 Run: `uv run ruff check . && uv run ruff format --check .`
-Expected: `All checks passed!` 와 `3 files already formatted`(`__init__.py`·`cli.py`·`test_cli.py`). 포맷 차이가 있으면 `uv run ruff format .` 후 다시 확인.
+Expected: `All checks passed!` 와 `5 files already formatted` — ruff 0.17은 Markdown 안의 Python 코드 블록도 포맷 검사하므로 `.py` 3개(`__init__.py`·`cli.py`·`test_cli.py`)에 spec·plan `.md` 2개가 더해진다(뒤 Task에서 문서가 늘면 이 수도 는다). 포맷 차이가 있으면 `uv run ruff format .` 후 다시 확인.
 
 - [ ] **Step 12: 커밋**
 
@@ -350,6 +350,8 @@ Expected: `No such file or directory`
 
 `secrets` 잡은 pre-commit의 gitleaks와 달리 **전체 이력**을 본다(`fetch-depth: 0`). pre-commit은 `--no-verify`나 미설치로 건너뛸 수 있어서다.
 
+`astral-sh/setup-uv`는 v8부터 떠다니는 메이저 태그(`v10`)를 내지 않는다(있는 것은 `v10.0.0`~`v10.3.3` 같은 정확한 버전 태그뿐) — `@v10`으로 쓰면 CI가 액션을 못 찾아 실패하므로 정확한 버전으로 고정한다. `actions/checkout`은 `v7` 메이저 태그가 있다.
+
 ```yaml
 name: ci
 
@@ -366,7 +368,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
       - name: 의존성 설치(잠금 파일 그대로)
