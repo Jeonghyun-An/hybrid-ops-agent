@@ -45,13 +45,15 @@ Expected: 두 파일 모두 `No such file or directory`
 - [x] **Step 3: `.gitignore` 작성**
 
 ```gitignore
-# 비밀값 — 커밋하지 않는다(SOPS로 암호화한 파일만 예외)
+# 비밀값 — 커밋하지 않는다(SOPS로 암호화한 파일의 예외 규칙은 round02에서 파일 이름 규칙과 함께 더한다)
 .env
 .env.*
 !.env.example
 *.agekey
 keys.txt
-kubeconfig*
+kubeconfig
+kubeconfig*.yaml
+kubeconfig*.yml
 *.kubeconfig
 
 # Python
@@ -72,7 +74,7 @@ dist/
 *.tfstate
 *.tfstate.*
 *.tfvars
-!*.tfvars.example
+*.tfvars.json
 
 # IDE·로컬 설정
 .vscode/settings.json
@@ -134,6 +136,9 @@ description = "온프레미스(k3s)와 Azure(AKS)를 함께 쓰는 쿠버네티�
 requires-python = ">=3.12"
 dependencies = ["hoa-agent"]
 
+[tool.uv]
+required-version = ">=0.11.31,<0.12"
+
 [tool.uv.workspace]
 members = ["agent"]
 
@@ -174,7 +179,7 @@ dependencies = []
 hoa = "hoa_agent.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 ```
 
@@ -276,7 +281,7 @@ Expected: `No such file or directory`
 ruff `rev`는 루트 `pyproject.toml` dev 그룹의 `ruff==0.17.4`와 같아야 한다(로컬 훅과 CI가 같은 판정을 내리게).
 
 ```yaml
-# 커밋 직전 검사. ruff rev 는 pyproject.toml dev 그룹의 ruff 버전과 맞춘다.
+# 커밋 직전 검사. ruff rev 는 pyproject.toml dev 그룹의 ruff 버전과, gitleaks rev 는 .github/workflows/ci.yml 의 gitleaks 다운로드 버전과 맞춘다.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -432,7 +437,7 @@ devcontainer는 작업 폴더와 `.git`을 호스트와 공유(bind mount)한다
 
 그 밖에: `remoteEnv`로 컨테이너 venv의 `bin`을 PATH 앞에 둬 컨테이너 셸에서 `uv run` 없이도 `hoa`·`pytest`·`pre-commit`을 부른다. Windows 호스트의 작업 폴더는 컨테이너 안에서 소유자가 달라 git이 `dubious ownership`으로 멈추므로 `postCreateCommand` 맨 앞에서 `safe.directory`에 작업 폴더를 등록한다(`git status`·`pre-commit run` 같은 git 기반 도구가 컨테이너에서 돈다). 사용자 설정(`--global`)이 아니라 시스템 설정(`--system`, `/etc/gitconfig`)에 쓰는 것은 VS Code가 호스트 `~/.gitconfig`를 컨테이너로 복사해 넣어도 덮이지 않게 하기 위해서고, 맨 앞에 두는 것은 뒤 단계(`uv sync`)가 실패해도 git은 쓸 수 있게 하기 위해서다. VS Code Python 확장은 작업 폴더 밖의 venv를 스스로 찾지 못할 수 있어 `python.defaultInterpreterPath`로 알려 준다. 그래도 Windows 호스트에서는 **커밋은 호스트에서** 한다 — 호스트에서 설치한 훅 스크립트가 CRLF라 컨테이너에서 실행되지 않는다(recurring-gotchas 3번).
 
-이미지는 현재 메이저(`3-`) 태그를 쓴다. `1-3.12-bookworm`은 1번대에서 멈춘 태그라 서명 키가 만료된 Yarn apt 저장소가 남아 있어, 기능(feature) 설치의 `apt-get update`가 실패한다(recurring-gotchas 2번). uv는 `pipx`로 설치한다 — 이 이미지의 `pipx` 설치 경로(`/usr/local/py-utils/bin`)는 PATH에 있지만 `pip install --user`의 `~/.local/bin`은 `postCreateCommand` 시점 PATH에 없다.
+이미지는 현재 메이저(`3-`) 태그를 쓴다. `1-3.12-bookworm`은 1번대에서 멈춘 태그라 서명 키가 만료된 Yarn apt 저장소가 남아 있어, 기능(feature) 설치의 `apt-get update`가 실패한다(recurring-gotchas 2번). uv는 `pipx`로 설치한다 — 이 이미지의 `pipx` 설치 경로(`/usr/local/py-utils/bin`)는 PATH에 있지만 `pip install --user`의 `~/.local/bin`은 `postCreateCommand` 시점 PATH에 없다. 버전 범위는 루트 `pyproject.toml`의 `[tool.uv] required-version`과 맞추고, `uv sync --locked`로 잠금 파일을 그대로 쓴다(컨테이너가 공유된 `uv.lock`을 고쳐 쓰지 않게).
 
 ```json
 {
@@ -450,7 +455,7 @@ devcontainer는 작업 폴더와 `.git`을 호스트와 공유(bind mount)한다
   "remoteEnv": {
     "PATH": "/home/vscode/.venv/bin:${containerEnv:PATH}"
   },
-  "postCreateCommand": "sudo git config --system --replace-all safe.directory ${containerWorkspaceFolder} && pipx install uv && uv sync",
+  "postCreateCommand": "sudo git config --system --replace-all safe.directory ${containerWorkspaceFolder} && pipx install 'uv>=0.11.31,<0.12' && uv sync --locked",
   "customizations": {
     "vscode": {
       "settings": {
@@ -594,12 +599,12 @@ Expected: `No such file or directory`
 | 브랜치 | 역할 | 규칙 |
 |---|---|---|
 | `main` | 배포 기준 — round02부터 Argo CD가 이 브랜치를 클러스터에 동기화한다 | 평소 직접 작업 금지. 라운드 종료 시 사용자 승인 하에 `dev → main` 머지 후 `origin` push. |
-| `dev` | 통합 브랜치 | 완성된 작업 브랜치가 모이는 곳. 클러스터에 배포하지 않고 CI로만 검증한다. |
+| `dev` | 통합 브랜치 | 완성된 작업 브랜치가 모이는 곳. 클러스터에 배포하지 않고 CI로만 검증한다. 직접 커밋은 완료노트 「상태」 체크만 한다(§라운드 생애주기 7·8). |
 | `<type>/round<NN>-<설명>` | 작업 브랜치 | `dev`에서 분기. 한 작업 단위 = 한 브랜치. |
 
 - 타입(Conventional): `feat`·`fix`·`docs`·`chore`·`refactor`·`test`
 - 설명은 영문 kebab-case(예: `feat/round01-end-to-end`) — 한글 브랜치명은 Windows·CI 호환성 문제로 쓰지 않는다.
-- 서브라운드: 한 라운드가 성격이 다른 여러 덩어리로 쪼개지면 `round<NN>a`~`round<NN>f`로 표기(예: `round02a`). 접미는 성격 라벨이며 실행 순서가 아니다.
+- 서브라운드: 한 라운드가 성격이 다른 여러 덩어리로 쪼개지면 소문자 접미를 붙인다(`round02a`, `round02b`…). 접미는 성격 라벨이며 실행 순서가 아니다.
 
 ## 흐름
 
@@ -609,13 +614,14 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 
 1. `dev`에서 작업 브랜치 분기
 2. 개발 → 커밋 → 원격 push. 솔로 작업이라도 작업 브랜치를 push한다 — CI는 push에서 돈다.
-3. 완성되면 리뷰(서브에이전트 정적 리뷰 + 자가 점검) → 사용자 승인을 받은 뒤 `dev`로 머지 (승인 전 머지 금지)
+3. 완성되면 리뷰(서브에이전트 정적 리뷰 + 자가 점검) → 사용자 승인을 받은 뒤 `dev`로 `--no-ff` 머지 (승인 전 머지 금지)
 4. `dev` push
 5. 라운드 종료(사용자 승인): `dev → main` 머지 + `origin` push
 
 ## 머지 승인 규칙
 
 - 작업 브랜치 → `dev`: 매번 사용자 채팅 승인 필수. 리뷰 게이트는 (1) `.claude/agents/code-reviewer.md` 서브에이전트의 정적 리뷰와 (2) 자가 점검 체크리스트(CI green + 관련 기능 수동 스모크 + 문서 갱신 여부)를 순서대로 통과하는 것이다.
+- 리뷰 발견 처리: high·medium은 모두 고친다. low는 고치거나, 고치지 않는 이유를 완료노트 「결정」에 한 줄로 적는다. 고친 뒤에는 CI를 다시 확인한다.
 - `dev` → `main`: 라운드 종료 판단·승인은 사용자. round02부터는 `main` push가 곧 배포다.
 
 ## 커밋 메시지
@@ -624,12 +630,14 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 - Type: `Feat`·`Fix`·`Docs`·`Chore`·`Refactor`·`Test`
 - 예) `[Feat] MCP k8s-read 서버에 events 도구 추가`, `[Fix] 평가 러너가 경보 대기 시간을 넘기면 멈추던 문제`, `[Docs] round01 교본 추가`
 - 본문은 꼭 필요할 때만 몇 줄.
+- 머지 커밋만 예외로 `Merge <브랜치> into <대상> — round<NN> (<요약>)` 형식을 쓴다(`git merge --no-ff -m`).
 - `Co-Authored-By` 트레일러와 "Generated with" 문구는 넣지 않는다(단독 저자).
 
 ## 품질 게이트 (pre-commit · CI)
 
 | 검사 | 어디서 | 들어오는 라운드 |
 |---|---|---|
+| 기본 위생(check-yaml·check-toml·파일 끝 줄바꿈·줄 끝 공백·충돌 표시·큰 파일) | pre-commit | round00 |
 | ruff check · ruff format --check | pre-commit + CI | round00 |
 | pytest | CI | round00 |
 | gitleaks | pre-commit(스테이징 변경) + CI(전체 이력) | round00 |
@@ -639,7 +647,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 - 검사는 그 파일 종류가 처음 생기는 라운드에 더한다 — 대상 없는 검사는 아무것도 증명하지 못한다.
 - `terraform apply`는 CI에서 돌리지 않는다. 로컬에서 사용자 승인 뒤 손으로만 한다.
 - 클론한 뒤 한 번(호스트에서): `uv run pre-commit install`. devcontainer 안에서는 하지 않는다(§개발 환경).
-- ruff 버전은 `pyproject.toml` dev 그룹과 `.pre-commit-config.yaml` rev를 같이 올린다.
+- 두 곳에 적힌 도구 버전은 같이 올린다: ruff는 `pyproject.toml` dev 그룹과 `.pre-commit-config.yaml` rev, gitleaks는 `.pre-commit-config.yaml` rev와 `.github/workflows/ci.yml` 다운로드 URL. uv는 `pyproject.toml`의 `[tool.uv] required-version`이 정본이다 — CI(setup-uv)는 이 값을 읽고, devcontainer `postCreateCommand`의 `pipx install` 버전 범위는 손으로 맞춘다.
 
 ## 개발 환경
 
@@ -652,6 +660,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 | Azure AKS | 작업할 때만 켜는 클라우드 클러스터 | round03 |
 
 - Python: `uv sync` → `uv run pytest`. Python 버전은 `.python-version`(3.12)에 맞춰 uv가 준비한다.
+- GitHub CLI(`gh`)는 호스트에 설치하고 `gh auth login`한다 — CI 결과 확인과 `/round-finish`가 쓴다.
 - devcontainer는 작업 폴더와 `.git`을 호스트와 공유한다. 그래서 컨테이너의 venv는 작업 폴더 밖(`/home/vscode/.venv`, `UV_PROJECT_ENVIRONMENT`)에 두고, `pre-commit install`은 호스트에서만 한다 — 컨테이너에서 하면 공유된 훅이 컨테이너 Python을 가리켜 호스트 커밋이 깨진다. Windows 호스트에서는 커밋도 호스트에서 한다 — 호스트에서 설치한 훅 스크립트가 CRLF라 컨테이너에서 실행되지 않는다(`docs/ops/recurring-gotchas.md` 3번).
 - 각 환경의 세부 절차(설치·접속·기동/정지)는 그 환경이 들어오는 라운드에 이 절에 더한다.
 
@@ -659,17 +668,18 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 
 - 1 라운드 = 1 교본(가이드). `docs/guides/round<NN>/`에 저장(템플릿: `docs/guides/_TEMPLATE.md`).
 - 구성: paraphrase된 라운드 프롬프트 → 전 코드/문서 클론코딩 가능하게 수록(발췌·플레이스홀더 금지) → 면접식 Q&A.
-- 리뷰 흐름: 작업 브랜치 push → 가이드+diff 대조 리뷰(`.claude/agents/code-reviewer.md`) → 승인 → `dev` 머지.
+- 리뷰 흐름: 작업 브랜치 push → 교본↔실제 파일 대조(스크립트로 기계 대조한 뒤 `.claude/agents/code-reviewer.md`로 한 번 더 — 리뷰어는 git을 실행하지 않으므로 대조할 파일 목록은 호출하는 쪽이 넘긴다) → 승인 → `dev` 머지.
 
 ## 라운드 생애주기
 
 1. 프롬프트→spec: `docs/superpowers/specs/`에 브레인스토밍 설계 작성(브레인스토밍 스킬).
 2. 계획: `docs/superpowers/plans/`에 구현 계획 작성(writing-plans 스킬).
 3. 구현: TDD(`docs/standards/coding-standard.md`).
-4. 검증: CI green + 관련 기능 수동 스모크(round01부터 평가 러너 시나리오 포함).
-5. 리뷰: `.claude/agents/code-reviewer.md` 서브에이전트로 정적 리뷰 → 발견 수정.
-6. 머지: 작업 브랜치 → 사용자 승인 → `dev`.
-7. 라운드 종료: 완료노트 작성(`docs/roadmap/round<NN>-완료노트.md`, 템플릿 `docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md`) → `docs/roadmap/00_status.md` 갱신 → `dev→main` 머지 + `origin` push. 자동화: `/round-finish` 스킬.
+4. 리뷰: `.claude/agents/code-reviewer.md` 서브에이전트로 정적 리뷰 → 발견 처리(§머지 승인 규칙).
+5. 검증: CI green + 관련 기능 수동 스모크(round01부터 평가 러너 시나리오 포함).
+6. 문서: 작업 브랜치에서 교본(`docs/guides/round<NN>/`)·완료노트(`docs/roadmap/round<NN>-완료노트.md`, 템플릿 `docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md`)를 쓰고 `docs/roadmap/00_status.md`를 갱신 → 교본 대조 리뷰(§개발 가이드 문서).
+7. 머지: 사용자 승인 → 작업 브랜치를 `dev`에 `--no-ff` 머지·push → `dev`에서 완료노트 「상태」의 `dev` 머지 승인 줄을 체크·커밋.
+8. 라운드 종료: 사용자 승인 → `/round-finish` 스킬로 `dev→main` 머지 + `origin` push → `dev`에서 완료노트 마지막 줄을 체크·커밋해 `dev`에만 push(다음 라운드 머지 때 `main`에 함께 올라간다).
 
 ## 비고
 
@@ -713,6 +723,7 @@ Expected: `No such file or directory`
 - Python 컴포넌트는 uv 워크스페이스 멤버 하나씩이다(`agent`·`mcp_servers`·`graphrag`·`demo_app`·`eval`). 멤버마다 컨테이너 이미지가 따로 나가므로 의존성을 섞지 않는다 — 예: MCP 서버 이미지에 LangGraph가 들어가지 않는다.
 - 멤버끼리 다른 멤버의 내부 모듈을 import하지 않는다. 공용 타입이 필요해지면 공용 멤버를 새로 만든다.
 - 레이아웃: `<멤버>/src/<import 이름>/`, 테스트는 `<멤버>/tests/`. import 이름은 `hoa_` 접두(`hoa_agent`).
+- 새 멤버를 더할 때는 루트 `pyproject.toml`의 다섯 곳을 같이 고친다 — `[tool.uv.workspace] members`·`[tool.uv.sources]`·`dependencies`·ruff `src`·pytest `testpaths`. `testpaths`를 빠뜨리면 새 멤버의 테스트가 CI에서 조용히 빠진다.
 
 ## 외부 호출 격리
 
@@ -794,7 +805,7 @@ Task 3에서 gitleaks 훅은 Go가 없어도 pre-commit이 툴체인을 직접 �
 ```markdown
 # 반복 함정 (Recurring Gotchas)
 
-라이브(클러스터·클라우드·실데이터)에서만 드러나는 패턴을 기록한다. 겪을 때마다 아래에 `## N. 제목` 섹션을 추가한다 — 라운드 문서가 아니라 상시 갱신 문서다. 표가 아니라 산문 섹션인 이유: 항목 하나가 원인 여러 개·하위 절차·쉘 명령(`|` 포함)을 가지는 경우가 흔한데, 표 셀에는 이게 안 들어간다.
+개발 환경·클러스터·클라우드·실데이터처럼 실제로 돌려 봐야만 드러나는 패턴을 기록한다. 겪을 때마다 아래에 `## N. 제목` 섹션을 추가한다 — 라운드 문서가 아니라 상시 갱신 문서다. 표가 아니라 산문 섹션인 이유: 항목 하나가 원인 여러 개·하위 절차·쉘 명령(`|` 포함)을 가지는 경우가 흔한데, 표 셀에는 이게 안 들어간다.
 
 각 섹션 구성: 날짜 · 증상 · 원인 · 해결 · 재발 방지.
 
@@ -804,7 +815,7 @@ Task 3에서 gitleaks 훅은 Go가 없어도 pre-commit이 툴체인을 직접 �
 - **증상**: Windows 개발 PC에서 `git commit` 때 `warning: in the working copy of '<파일>', LF will be replaced by CRLF the next time Git touches it`가 뜬다.
 - **원인**: 전역 설정 `core.autocrlf=true`가 작업 사본을 CRLF로 바꾸려 한다. 같은 파일을 Linux(집 PC·CI·컨테이너)에서 쓰면 줄바꿈이 섞이고, 셸 스크립트는 줄 끝의 `\r` 때문에 `bad interpreter`로 죽는다.
 - **해결**: 저장소 `.gitattributes`에 `* text=auto eol=lf`를 둔다. `eol` 속성은 개인 설정 `core.autocrlf`보다 우선하므로 작업 사본도 LF로 고정된다(PowerShell 스크립트만 CRLF). 이미 들어간 파일은 `git add --renormalize .`로 다시 정규화한다.
-- **재발 방지**: 확인은 `git ls-files --eol`에서 모든 줄이 `i/lf w/lf`인지 본다. Windows 전용 파일 종류가 새로 생기면 `.gitattributes`에 규칙을 더한다.
+- **재발 방지**: 확인은 `git ls-files --eol`에서 텍스트 파일이 모두 `i/lf w/lf`인지 본다(`.ps1`은 `w/crlf`, 이미지는 `-text`). Windows 전용 파일 종류가 새로 생기면 `.gitattributes`에 규칙을 더한다.
 
 ## 2. devcontainer 이미지 빌드가 Yarn 저장소 서명 오류로 실패
 
@@ -817,7 +828,7 @@ Task 3에서 gitleaks 훅은 Go가 없어도 pre-commit이 툴체인을 직접 �
 ## 3. Windows 호스트와 공유한 작업 폴더에서 컨테이너 git이 멈추고 훅이 안 돎
 
 - **날짜**: 2026-11-09 (round00)
-- **증상**: devcontainer 안에서 `git status`가 `fatal: detected dubious ownership in repository at '/workspaces/hybrid-ops-agent'`로 멈춘다. `safe.directory`로 넘겨도 `.git/hooks/pre-commit` 실행이 `not found`(종료 코드 127)로 실패한다.
+- **증상**: devcontainer 안에서 `git status`가 `fatal: detected dubious ownership in repository at '/workspaces/hybrid-ops-agent'`로 멈춘다. `safe.directory`로 넘겨도 `git commit`이 `cannot exec '.git/hooks/pre-commit': No such file or directory`로 실패한다(훅을 직접 실행하면 `not found`, 종료 코드 127).
 - **원인**: (1) Windows 호스트의 작업 폴더는 bind mount 안에서 컨테이너 사용자(`vscode`)와 소유자가 달라, git의 소유자 검사가 저장소를 거부한다. (2) `.git/hooks`는 추적되지 않는 파일이라 `.gitattributes`가 적용되지 않는데, 호스트(Windows)의 pre-commit이 훅 스크립트를 CRLF로 쓴다. 첫 줄 `#!/bin/sh\r`의 `\r` 때문에 Linux가 인터프리터를 찾지 못한다(Git Bash는 이를 견딘다).
 - **해결**: `postCreateCommand` 맨 앞에서 `sudo git config --system --replace-all safe.directory ${containerWorkspaceFolder}`로 작업 폴더를 등록한다(시스템 설정이라 VS Code가 복사해 넣는 `~/.gitconfig`에 덮이지 않는다). 커밋은 호스트에서 한다 — 컨테이너에서 `pre-commit install`로 훅을 다시 쓰면 이번엔 호스트 커밋이 깨진다(훅이 컨테이너 Python 경로를 가리킨다).
 - **재발 방지**: 컨테이너는 도구(uv·kubectl·helm·terraform·az)와 테스트·`pre-commit run`용으로 쓰고, `git commit`은 호스트에서 한다(`GIT_WORKFLOW.md` §개발 환경). 컨테이너의 venv는 `UV_PROJECT_ENVIRONMENT`로 작업 폴더 밖에 둬서 호스트 `.venv`를 건드리지 않는다.
@@ -882,11 +893,11 @@ plan: `docs/superpowers/plans/<파일>`
 -
 
 ## 상태
-- [ ] code-reviewer 정적 리뷰 통과(발견 사항 반영 완료)
-- [ ] CI green
+- [ ] code-reviewer 정적 리뷰 통과(high·medium 수정, low는 수정하거나 「결정」에 이유)
+- [ ] CI green(작업 브랜치 마지막 커밋)
 - [ ] 수동 스모크 확인
 - [ ] 문서 갱신(교본·00_status·라이브에서 새로 겪은 함정을 `docs/ops/recurring-gotchas.md`에 추가)
-- [ ] Azure 리소스 정지 확인(AKS를 켠 라운드만 — `az aks show -g <그룹> -n <클러스터> --query powerState.code`가 `Stopped`)
+- [ ] Azure 리소스 정지 확인(AKS를 켠 라운드만 — `az aks show -g <그룹> -n <클러스터> --query powerState.code -o tsv`가 `Stopped`. 켜지 않은 라운드는 「해당 없음」을 덧붙이고 체크)
 - [ ] `dev` 머지 승인
 - [ ] `dev→main` 머지 + push 완료
 ```
@@ -919,6 +930,7 @@ plan: `docs/superpowers/plans/<파일>`
 
 ## 4. 면접식 Q&A
 **Q1. <질문>**
+
 A. <답변>
 ````
 
@@ -956,11 +968,11 @@ tools: Read, Grep, Glob
 model: opus
 ---
 
-너는 이 프로젝트(hybrid-ops-agent — 온프레미스 k3s와 Azure AKS를 함께 쓰는 쿠버네티스 운영 에이전트)의 정적 리뷰어다. 지정된 영역(코드 디렉터리·인프라 정의·문서 집합)을 읽고 결함을 찾아 보고한다. 파일을 수정하지 않는다. git·kubectl·helm·terraform·az·테스트를 실행하지 않는다.
+너는 이 프로젝트(hybrid-ops-agent — 온프레미스 k3s와 Azure AKS를 함께 쓰는 쿠버네티스 운영 에이전트)의 정적 리뷰어다. 지정된 영역(코드 디렉터리·인프라 정의·문서 집합)을 읽고 결함을 찾아 보고한다. 파일을 수정하지 않는다. git·kubectl·helm·terraform·az·테스트를 실행하지 않는다. 리뷰할 범위(파일 목록·변경 내용·명령 출력)는 호출하는 쪽이 프롬프트로 넘긴다.
 
 ## 프로젝트 맥락 (판단 기준)
 - 전체 설계: `docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md`. 이번 라운드 범위는 그 라운드의 spec·plan(`docs/superpowers/plans/`)이 정한다 — 뒤 라운드 기능이 아직 없다는 것은 결함이 아니다.
-- 에이전트: LangGraph(triage → supervisor → 서브에이전트 → 진단 → 사람 승인 → 실행·검증 → postmortem). 클러스터 접근은 MCP 서버를 거쳐서만 한다.
+- 에이전트: LangGraph(triage → supervisor → 서브에이전트 → 진단 → 조치 계획(`propose_fix`, 허용 목록 안) → 사람 승인 → 실행·검증 → postmortem). 에이전트의 클러스터 접근은 MCP 서버를 거쳐서만 한다 — 에이전트가 아닌 예외 두 곳(graphrag 동기화 잡·eval 장애 주입)은 `docs/standards/coding-standard.md` 「외부 호출 격리」.
 - 배치: 상태 있는 것(Neo4j·Postgres·vLLM·관측)은 상시 켜진 온프레미스에, AKS에는 상태 없는 앱만 둔다. AKS는 작업할 때만 켠다.
 - 코딩 표준 정본: `docs/standards/coding-standard.md`. 그 문서 「백로그」에 적힌 반례는 새 결함으로 재보고하지 않는다 — 신규/수정 코드가 반례를 새로 늘리는 경우에만 지적한다.
 
@@ -972,7 +984,7 @@ model: opus
    - RBAC 최소 권한 — 쓰기 권한이 데모 네임스페이스 밖으로 새는지, Role/ClusterRole에 `*` 동사·리소스가 있는지.
    - 쓰기 MCP 도구가 허용 목록·서버 측 dry-run·사람 승인을 우회하는 경로.
    - 도구 결과(로그·이벤트·런북 문장)가 구조화된 plan을 거치지 않고 실행 경로로 흘러가는 프롬프트 인젝션 경로.
-4. **인프라**: 이미지 태그 고정, resources requests/limits, Terraform이 비용 나는 리소스를 상시 켜 두는지(AKS 자동 정지·예산 알림 누락), CI에 `terraform apply`나 클라우드 쓰기 권한이 들어갔는지.
+4. **인프라**: 이미지 태그 고정, resources requests/limits, Terraform이 비용 나는 리소스를 상시 켜 두는지(AKS 자동 정지·예산 알림 누락), CI에 `terraform apply`나 클라우드 쓰기 권한이 들어갔는지, Terraform 변경이 기존 리소스를 교체·삭제하는지(재생성을 일으키는 속성 변경, 상태 있는 리소스의 `lifecycle { prevent_destroy }` 누락). `terraform plan`은 실행하지 않으므로 `.tf` 소스와 호출하는 쪽이 붙여 준 plan 출력으로 본다.
 5. **일관성**(문서 리뷰 시): 문서↔코드, 문서 간(어휘·스택·결정) 정합 + stale 서술. 교본은 실제 파일과 한 글자도 다르지 않아야 한다(전체 수록 규칙).
 6. **반복 함정**(`docs/ops/recurring-gotchas.md`): 리뷰 전에 먼저 읽고, 기록된 패턴과 대조한다.
 
@@ -1020,24 +1032,27 @@ description: hybrid-ops-agent 라운드를 종료할 때 사용 — dev에 머�
 
 ## 전제 (확인 후 진행)
 - 작업 브랜치가 이미 `dev`에 머지돼 있다(사용자 승인 하).
-- `dev`의 최신 CI가 green이다: `gh run list --branch dev --limit 1 --json status,conclusion,headSha`가 `status` `completed`·`conclusion` `success`이고 `headSha`가 `git rev-parse origin/dev`와 같다(진행 중인 실행이나 이전 커밋의 실행을 green으로 보지 않는다).
+- `dev`의 CI가 green이다 — 원격 상태를 받은 뒤에 봐야 하므로 확인은 절차 6단계에서 한다.
 - 핵심 기능 수동 스모크를 확인했다.
 - 사용자가 라운드 종료를 승인했다(이 단계는 `main`을 움직이므로 임의 진행 금지). round02부터는 `main` push가 Argo CD 배포를 일으킨다.
 - **`main`·`dev` 체크아웃은 주 저장소 디렉토리에서 한다** — 라운드 작업을 격리 워크트리에서 했다면 그 워크트리 안에서 `main`을 체크아웃하지 않는다(그 라운드의 신규 파일이 아직 `main`에 없어 사라져 보이고, `main`·`dev`가 다른 워크트리에 물려 있으면 체크아웃 자체가 거부된다).
 
 ## 절차
-1. 검증 재확인 — CI green, 핵심 동작 스모크 확인.
+1. 핵심 동작 수동 스모크를 확인했는지 본다(CI는 6단계에서 원격 기준으로 본다).
 2. 완료노트(`docs/roadmap/round<NN>-완료노트.md`)의 `## 상태` 체크리스트(정적 리뷰·CI·스모크·문서 갱신·Azure 정지·머지 승인) 확인.
 3. 라운드 중 라이브에서 새로 겪은 함정이 있으면 `docs/ops/recurring-gotchas.md`에 추가됐는지 확인.
 4. `docs/roadmap/00_status.md` 갱신 확인(최종 갱신 날짜·현재 상태·다음 할 일·라운드 이력 — 라운드 이력만 바꾸고 현재 상태를 그대로 두지 않는다).
-5. Azure를 쓴 라운드면 AKS가 꺼져 있는지 확인: `az aks show -g <그룹> -n <클러스터> --query powerState.code` → `Stopped`.
-6. **머지 전 확인**:
+5. Azure를 쓴 라운드면 AKS가 꺼져 있는지 확인: `az aks show -g <그룹> -n <클러스터> --query powerState.code -o tsv` → `Stopped`.
+6. **머지 전 확인** — 하나라도 어긋나면 중단하고 사용자에게 보고한다:
    ```bash
-   git rev-list --count main..dev   # 0이면 중단 — dev에 이번 라운드가 없다, 먼저 작업 브랜치→dev 머지부터
    git fetch origin
-   git rev-list --count main..origin/main   # 0이 아니면 중단 — 원격 main이 앞서 있다, 먼저 받아서 정리
-   git rev-list --count dev..origin/dev     # 0이 아니면 중단 — 원격 dev가 앞서 있다(다른 PC에서 push), 먼저 받아서 정리
+   git status --porcelain                          # 출력이 있으면 중단 — 커밋 안 된 변경
+   git merge-base --is-ancestor <작업 브랜치> dev   # 종료 코드 1이면 중단 — 완료노트 「브랜치:」 줄의 작업 브랜치가 dev에 머지되지 않았다
+   git rev-parse dev origin/dev                    # 두 값이 다르면 중단 — 로컬만 앞서면 dev를 push해 CI부터, 원격이 앞서면(다른 PC에서 push) 먼저 받아서 정리
+   git rev-list --count main..origin/main          # 0이 아니면 중단 — 원격 main이 앞서 있다, 먼저 받아서 정리
+   gh run list --workflow ci.yml --event push --branch dev --limit 1 --json status,conclusion,headSha
    ```
+   마지막 명령은 `status`가 `completed`, `conclusion`이 `success`이고 `headSha`가 `git rev-parse origin/dev`와 같아야 한다 — 진행 중인 실행이나 이전 커밋의 실행을 green으로 보지 않는다. 로컬 작업 브랜치를 지웠으면 `<작업 브랜치>` 자리에 `origin/<작업 브랜치>`를 쓴다.
 7. `dev → main` 머지
    ```bash
    git checkout main
@@ -1048,7 +1063,7 @@ description: hybrid-ops-agent 라운드를 종료할 때 사용 — dev에 머�
    git push origin main && git push -u origin dev
    ```
    (`dev`가 이미 원격에 있고 추적 중이면 `-u` 없이 `git push origin dev`로 충분.)
-9. push 뒤 `main` CI 확인: `gh run list --branch main --limit 1 --json databaseId,headSha`에서 `headSha`가 `git rev-parse origin/main`인 실행을 `gh run watch <databaseId> --exit-status`로 끝까지 본다.
+9. push 뒤 `main` CI 확인: `gh run list --workflow ci.yml --event push --branch main --limit 1 --json databaseId,headSha`에서 `headSha`가 `git rev-parse origin/main`인 실행을 `gh run watch <databaseId> --exit-status`로 끝까지 본다. push 직후라 그 실행이 아직 없으면(`headSha`가 다르면) 잠시 뒤 다시 조회한다. 실패하면 멈추고 사용자에게 보고한다(round02부터는 배포가 이미 시작됐을 수 있다).
 10. 작업 복귀: `git checkout dev`.
 11. 완료노트 「상태」의 마지막 줄(`dev→main` 머지 + push 완료)은 이 절차 뒤 `dev`에서 체크·커밋해 `dev`에만 push한다 — 그 한 줄 때문에 `main`을 다시 머지하지 않는다(다음 라운드 머지 때 함께 올라간다).
 
@@ -1115,7 +1130,7 @@ Expected: `No such file or directory`
 
 ## 시작하기
 
-[uv](https://docs.astral.sh/uv/)가 필요하다(Python 3.12는 uv가 준비한다).
+[uv](https://docs.astral.sh/uv/)가 필요하다(Python 3.12는 uv가 준비한다). CI 결과 확인과 라운드 종료 절차에는 [GitHub CLI](https://cli.github.com/)(`gh auth login`)를 쓴다.
 
 ```bash
 uv sync
@@ -1265,30 +1280,39 @@ high·medium은 모두 고친다. low는 고치거나, 고치지 않는 이유�
 「4. 면접식 Q&A」 — 아래 9문항을 그대로 싣는다:
 
 **Q1. 왜 Python 코드를 uv 워크스페이스의 여러 멤버로 나눴나?**
+
 A. 멤버마다 컨테이너 이미지가 따로 나가기 때문이다. MCP 서버 이미지에 LangGraph까지 들어가면 이미지가 커지고 공격 면도 넓어진다. 워크스페이스는 멤버별 의존성을 분리하면서도 잠금 파일(`uv.lock`) 하나로 버전을 일관되게 묶는다. 다른 멤버의 내부 모듈을 import하지 못하게 하는 경계 역할도 한다.
 
 **Q2. 루트 `pyproject.toml`에 `[build-system]`이 없는 이유는?**
+
 A. 루트는 배포할 패키지가 아니라 워크스페이스와 개발 도구(pytest·ruff·pre-commit)를 묶는 자리다. uv는 build-system이 없는 프로젝트를 패키지로 빌드·설치하지 않고 의존성만 맞춘다. 실제 코드는 멤버(`agent/`)가 hatchling으로 빌드한다.
 
 **Q3. CI에서 `uv sync`가 아니라 `uv sync --locked`를 쓰는 이유는?**
+
 A. `--locked`는 잠금 파일이 `pyproject.toml`과 어긋나면 실패한다. 로컬에서 의존성을 바꾸고 `uv.lock` 갱신을 빠뜨린 커밋을 CI가 잡고, CI가 개발 PC와 같은 버전으로 테스트한다는 것을 보장한다.
 
 **Q4. gitleaks를 pre-commit과 CI 두 곳에 둔 이유는?**
+
 A. pre-commit은 스테이징된 변경만 빠르게 보고, `--no-verify`나 훅 미설치로 건너뛸 수 있다. CI는 `fetch-depth: 0`으로 전체 이력을 다시 본다. public 저장소는 한 번 push된 비밀값을 이력에서 지워도 이미 노출된 것으로 봐야 하므로(키 폐기만이 해결) 두 겹으로 막는다.
 
 **Q5. `.gitattributes`의 `eol=lf`와 `core.autocrlf`는 무엇이 다른가?**
+
 A. `core.autocrlf`는 사람마다 다른 개인 설정이고, `.gitattributes`는 저장소에 커밋되어 모두에게 같은 규칙을 강제한다. `eol` 속성은 `core.autocrlf`보다 우선한다. Windows에서 만든 셸 스크립트가 CRLF로 Linux(집 PC·CI·컨테이너)에 가면 줄 끝 `\r` 때문에 실행이 실패하므로 LF로 고정했다.
 
 **Q6. argparse의 `action="version"`은 테스트에서 어떻게 다뤘나?**
+
 A. 이 액션은 버전을 출력한 뒤 `SystemExit(0)`을 던진다. 테스트는 `pytest.raises(SystemExit)`로 잡아 종료 코드가 0인지, `capsys`로 표준출력이 `hoa <버전>`인지 확인한다. 콘솔 스크립트는 `main()`의 반환값을 `sys.exit`에 넘기므로 `main`은 정상 종료 시 0을 반환한다.
 
 **Q7. `dev` 브랜치를 클러스터에 배포하지 않고 CI로만 검증하는 이유는?**
+
 A. 상시 클러스터가 집 PC 한 대뿐이고 AKS는 작업할 때만 켜므로 환경을 둘로 나눌 자원이 없다. 대신 `main`을 Argo CD가 보게 해 "main = 배포 기준"을 GitOps로 문자 그대로 만들고, `dev`는 통합 검증(CI, round01부터 kind 통합 테스트)에 쓴다.
 
 **Q8. helm lint·terraform validate 같은 게이트를 round00에 미리 넣지 않은 이유는?**
+
 A. 검사할 Helm 차트나 Terraform 파일이 아직 없으면 그 게이트는 늘 통과하고 아무것도 증명하지 못한다. 대상 파일이 처음 생기는 라운드(round02·round03)에 게이트를 더하고, 그 라운드의 완료 기준에 포함한다.
 
 **Q9. 혼자 하는 프로젝트인데 브랜치·리뷰·승인 절차를 지키는 이유는?**
+
 A. 코드 대부분을 에이전트(Claude)가 쓰므로, 사람이 확인하는 지점(dev 머지 승인·main 머지 승인)이 품질과 안전의 게이트가 된다. 라운드마다 남는 spec·plan·완료노트·교본은 결정의 근거를 기록해서, 나중에 왜 이렇게 만들었는지 설명할 수 있게 해 준다.
 
 - [ ] **Step 2: 교본이 실제 파일과 같은지 확인**
