@@ -31,6 +31,6 @@ plan: `docs/superpowers/plans/<파일>`
 - [ ] CI green
 - [ ] 수동 스모크 확인
 - [ ] 문서 갱신(교본·00_status·라이브에서 새로 겪은 함정을 `docs/ops/recurring-gotchas.md`에 추가)
-- [ ] Azure 리소스 정지 확인(AKS를 켠 라운드만 — `az aks show -g <그룹> -n <클러스터> --query powerState.code`가 `Stopped`)
+- [ ] Azure 리소스 정지 확인(AKS를 켠 라운드만 — `az aks show -g <그룹> -n <클러스터> --query powerState.code -o tsv`가 `Stopped`. 켜지 않은 라운드는 「해당 없음」을 덧붙이고 체크)
 - [ ] `dev` 머지 승인
 - [ ] `dev→main` 머지 + push 완료
