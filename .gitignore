@@ -1,10 +1,12 @@
-# 비밀값 — 커밋하지 않는다(SOPS로 암호화한 파일만 예외)
+# 비밀값 — 커밋하지 않는다(SOPS로 암호화한 파일의 예외 규칙은 round02에서 파일 이름 규칙과 함께 더한다)
 .env
 .env.*
 !.env.example
 *.agekey
 keys.txt
-kubeconfig*
+kubeconfig
+kubeconfig*.yaml
+kubeconfig*.yml
 *.kubeconfig
 
 # Python
@@ -25,7 +27,7 @@ dist/
 *.tfstate
 *.tfstate.*
 *.tfvars
-!*.tfvars.example
+*.tfvars.json
 
 # IDE·로컬 설정
 .vscode/settings.json
