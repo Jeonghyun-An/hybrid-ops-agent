@@ -52,9 +52,11 @@ Expected: 두 파일 모두 `No such file or directory`
 *.agekey
 keys.txt
 kubeconfig
+!kubeconfig/
 kubeconfig*.yaml
 kubeconfig*.yml
 *.kubeconfig
+k3s.yaml
 
 # Python
 __pycache__/
@@ -668,7 +670,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 
 - 1 라운드 = 1 교본(가이드). `docs/guides/round<NN>/`에 저장(템플릿: `docs/guides/_TEMPLATE.md`).
 - 구성: paraphrase된 라운드 프롬프트 → 전 코드/문서 클론코딩 가능하게 수록(발췌·플레이스홀더 금지) → 면접식 Q&A.
-- 리뷰 흐름: 작업 브랜치 push → 교본↔실제 파일 대조(스크립트로 기계 대조한 뒤 `.claude/agents/code-reviewer.md`로 한 번 더 — 리뷰어는 git을 실행하지 않으므로 대조할 파일 목록은 호출하는 쪽이 넘긴다) → 승인 → `dev` 머지.
+- 리뷰 흐름: 작업 브랜치 push → 교본↔실제 파일 대조(교본의 코드블록을 뽑아 실제 파일과 diff한다 — 제목 수만 세지 않는다. 그다음 `.claude/agents/code-reviewer.md`로 한 번 더 본다. 리뷰어는 git을 실행하지 않으므로 대조할 파일 목록은 호출하는 쪽이 넘긴다) → 승인 → `dev` 머지.
 
 ## 라운드 생애주기
 
@@ -678,7 +680,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 4. 리뷰: `.claude/agents/code-reviewer.md` 서브에이전트로 정적 리뷰 → 발견 처리(§머지 승인 규칙).
 5. 검증: CI green + 관련 기능 수동 스모크(round01부터 평가 러너 시나리오 포함).
 6. 문서: 작업 브랜치에서 교본(`docs/guides/round<NN>/`)·완료노트(`docs/roadmap/round<NN>-완료노트.md`, 템플릿 `docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md`)를 쓰고 `docs/roadmap/00_status.md`를 갱신 → 교본 대조 리뷰(§개발 가이드 문서).
-7. 머지: 사용자 승인 → 작업 브랜치를 `dev`에 `--no-ff` 머지·push → `dev`에서 완료노트 「상태」의 `dev` 머지 승인 줄을 체크·커밋.
+7. 머지: 사용자 승인 → 작업 브랜치를 `dev`에 `--no-ff` 머지·push → `dev`에서 완료노트 「상태」의 `dev` 머지 승인 줄을 체크·커밋·push(`dev` CI).
 8. 라운드 종료: 사용자 승인 → `/round-finish` 스킬로 `dev→main` 머지 + `origin` push → `dev`에서 완료노트 마지막 줄을 체크·커밋해 `dev`에만 push(다음 라운드 머지 때 `main`에 함께 올라간다).
 
 ## 비고
@@ -896,7 +898,7 @@ plan: `docs/superpowers/plans/<파일>`
 - [ ] code-reviewer 정적 리뷰 통과(high·medium 수정, low는 수정하거나 「결정」에 이유)
 - [ ] CI green(작업 브랜치 마지막 커밋)
 - [ ] 수동 스모크 확인
-- [ ] 문서 갱신(교본·00_status·라이브에서 새로 겪은 함정을 `docs/ops/recurring-gotchas.md`에 추가)
+- [ ] 문서 갱신(교본·00_status·실제로 돌려 보며 새로 겪은 함정(개발 환경 포함)을 `docs/ops/recurring-gotchas.md`에 추가)
 - [ ] Azure 리소스 정지 확인(AKS를 켠 라운드만 — `az aks show -g <그룹> -n <클러스터> --query powerState.code -o tsv`가 `Stopped`. 켜지 않은 라운드는 「해당 없음」을 덧붙이고 체크)
 - [ ] `dev` 머지 승인
 - [ ] `dev→main` 머지 + push 완료
@@ -1040,19 +1042,19 @@ description: hybrid-ops-agent 라운드를 종료할 때 사용 — dev에 머�
 ## 절차
 1. 핵심 동작 수동 스모크를 확인했는지 본다(CI는 6단계에서 원격 기준으로 본다).
 2. 완료노트(`docs/roadmap/round<NN>-완료노트.md`)의 `## 상태` 체크리스트(정적 리뷰·CI·스모크·문서 갱신·Azure 정지·머지 승인) 확인.
-3. 라운드 중 라이브에서 새로 겪은 함정이 있으면 `docs/ops/recurring-gotchas.md`에 추가됐는지 확인.
+3. 라운드 중 실제로 돌려 보며 새로 겪은 함정(개발 환경 포함)이 있으면 `docs/ops/recurring-gotchas.md`에 추가됐는지 확인.
 4. `docs/roadmap/00_status.md` 갱신 확인(최종 갱신 날짜·현재 상태·다음 할 일·라운드 이력 — 라운드 이력만 바꾸고 현재 상태를 그대로 두지 않는다).
-5. Azure를 쓴 라운드면 AKS가 꺼져 있는지 확인: `az aks show -g <그룹> -n <클러스터> --query powerState.code -o tsv` → `Stopped`.
+5. AKS를 켠 라운드면 꺼져 있는지 확인: `az aks show -g <그룹> -n <클러스터> --query powerState.code -o tsv` → `Stopped`.
 6. **머지 전 확인** — 하나라도 어긋나면 중단하고 사용자에게 보고한다:
    ```bash
    git fetch origin
    git status --porcelain                          # 출력이 있으면 중단 — 커밋 안 된 변경
-   git merge-base --is-ancestor <작업 브랜치> dev   # 종료 코드 1이면 중단 — 완료노트 「브랜치:」 줄의 작업 브랜치가 dev에 머지되지 않았다
+   git merge-base --is-ancestor origin/<작업 브랜치> dev && echo merged || echo 중단   # merged가 아니면 중단 — 완료노트 「브랜치:」 줄의 작업 브랜치가 dev에 머지되지 않았거나 원격에 없다
    git rev-parse dev origin/dev                    # 두 값이 다르면 중단 — 로컬만 앞서면 dev를 push해 CI부터, 원격이 앞서면(다른 PC에서 push) 먼저 받아서 정리
-   git rev-list --count main..origin/main          # 0이 아니면 중단 — 원격 main이 앞서 있다, 먼저 받아서 정리
+   git rev-parse main origin/main                  # 두 값이 다르면 중단 — 원격이 앞서면 먼저 받아서 정리, 로컬에만 있는 커밋이면 원인부터 확인
    gh run list --workflow ci.yml --event push --branch dev --limit 1 --json status,conclusion,headSha
    ```
-   마지막 명령은 `status`가 `completed`, `conclusion`이 `success`이고 `headSha`가 `git rev-parse origin/dev`와 같아야 한다 — 진행 중인 실행이나 이전 커밋의 실행을 green으로 보지 않는다. 로컬 작업 브랜치를 지웠으면 `<작업 브랜치>` 자리에 `origin/<작업 브랜치>`를 쓴다.
+   마지막 명령은 `status`가 `completed`, `conclusion`이 `success`이고 `headSha`가 `git rev-parse origin/dev`와 같아야 한다 — 진행 중인 실행이나 이전 커밋의 실행을 green으로 보지 않는다.
 7. `dev → main` 머지
    ```bash
    git checkout main
@@ -1060,9 +1062,9 @@ description: hybrid-ops-agent 라운드를 종료할 때 사용 — dev에 머�
    ```
 8. origin push
    ```bash
-   git push origin main && git push -u origin dev
+   git push origin main
    ```
-   (`dev`가 이미 원격에 있고 추적 중이면 `-u` 없이 `git push origin dev`로 충분.)
+   (`dev`는 6단계에서 원격과 같다는 것을 확인했으므로 다시 push하지 않는다.)
 9. push 뒤 `main` CI 확인: `gh run list --workflow ci.yml --event push --branch main --limit 1 --json databaseId,headSha`에서 `headSha`가 `git rev-parse origin/main`인 실행을 `gh run watch <databaseId> --exit-status`로 끝까지 본다. push 직후라 그 실행이 아직 없으면(`headSha`가 다르면) 잠시 뒤 다시 조회한다. 실패하면 멈추고 사용자에게 보고한다(round02부터는 배포가 이미 시작됐을 수 있다).
 10. 작업 복귀: `git checkout dev`.
 11. 완료노트 「상태」의 마지막 줄(`dev→main` 머지 + push 완료)은 이 절차 뒤 `dev`에서 체크·커밋해 `dev`에만 push한다 — 그 한 줄 때문에 `main`을 다시 머지하지 않는다(다음 라운드 머지 때 함께 올라간다).
@@ -1130,7 +1132,7 @@ Expected: `No such file or directory`
 
 ## 시작하기
 
-[uv](https://docs.astral.sh/uv/)가 필요하다(Python 3.12는 uv가 준비한다). CI 결과 확인과 라운드 종료 절차에는 [GitHub CLI](https://cli.github.com/)(`gh auth login`)를 쓴다.
+[uv](https://docs.astral.sh/uv/) 0.11(0.11.31 이상 — `pyproject.toml`의 `[tool.uv] required-version`)이 필요하다(Python 3.12는 uv가 준비한다). CI 결과 확인과 라운드 종료 절차에는 [GitHub CLI](https://cli.github.com/)(`gh auth login`)를 쓴다.
 
 ```bash
 uv sync
@@ -1318,7 +1320,7 @@ A. 코드 대부분을 에이전트(Claude)가 쓰므로, 사람이 확인하는
 - [ ] **Step 2: 교본이 실제 파일과 같은지 확인**
 
 Run: `grep -c '^### 2\.' docs/guides/round00/00-개요.md`
-Expected: `21` — Step 1 순서 목록의 파일 20개 + `docs/guides/_TEMPLATE.md` 본문 안에 들어 있는 `### 2.1 <파일/컴포넌트명>` 한 줄. 이어서 파일마다 교본 수록본과 실제 파일이 같은지 code-reviewer(Task 16 영역 B를 한 번 더)로 대조한다.
+Expected: `21` — Step 1 순서 목록의 파일 20개 + `docs/guides/_TEMPLATE.md` 본문 안에 들어 있는 `### 2.1 <파일/컴포넌트명>` 한 줄. 이어서 교본의 코드블록을 뽑아 실제 파일과 diff해 20개가 모두 같은지 확인하고(제목 수만으로는 내용 일치를 보장하지 못한다), code-reviewer(Task 16 영역 B를 한 번 더)로 한 번 더 본다. 커밋 전에는 `uv run pre-commit run ruff-format --files docs/guides/round00/00-개요.md`를 돌린 뒤 `git diff`가 비어 있는지 본다 — ruff format이 교본 안의 python 블록을 고치면 수록본이 실제 파일과 달라진다.
 
 - [ ] **Step 3: 완료노트 작성 — `docs/roadmap/round00-완료노트.md`**
 
