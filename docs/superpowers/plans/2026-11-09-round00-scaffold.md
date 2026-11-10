@@ -676,7 +676,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 
 ## 라운드 생애주기
 
-1. 프롬프트→spec: `docs/superpowers/specs/`에 브레인스토밍 설계 작성(브레인스토밍 스킬).
+1. 프롬프트→spec: `docs/superpowers/specs/`에 브레인스토밍 설계 작성(브레인스토밍 스킬) → 사용자 확인 뒤 계획으로 넘어간다.
 2. 계획: `docs/superpowers/plans/`에 구현 계획 작성(writing-plans 스킬) → 계획서 파일을 사용자에게 문서로 보여 주고 확인받은 뒤 구현한다.
 3. 구현: TDD(`docs/standards/coding-standard.md`).
 4. 리뷰: `.claude/agents/code-reviewer.md` 서브에이전트로 정적 리뷰 → 발견 처리(§머지 승인 규칙).
@@ -1215,7 +1215,7 @@ git commit -m "[Docs] round00 — 00_status: 현재 상태(round00 진행 중)·
 
 ### Task 15: 원격 첫 push와 CI 확인 — **사용자 승인 필요**
 
-public 저장소에 처음 올리는 단계다. 시작 전에 사용자에게 "로컬 검증이 끝났으니 `main`·`dev`·`feat/round00-scaffold`를 push해도 되는지" 묻고 승인을 받는다.
+public 저장소에 처음 올리는 단계다(첫 공개 push라 예외로 승인을 받는다 — 그 뒤의 push 규칙은 `CLAUDE.md` §3). 시작 전에 사용자에게 "로컬 검증이 끝났으니 `main`·`dev`·`feat/round00-scaffold`를 push해도 되는지" 묻고 승인을 받는다.
 
 - [x] **Step 1: 로컬 전체 검증**
 
@@ -1326,7 +1326,7 @@ A. 검사할 Helm 차트나 Terraform 파일이 아직 없으면 그 게이트�
 
 **Q9. 혼자 하는 프로젝트인데 브랜치·리뷰·승인 절차를 지키는 이유는?**
 
-A. 코드 대부분을 에이전트(Claude)가 쓰므로, 사람이 확인하는 지점(계획서 확인·dev 머지 승인·main 머지 승인)이 품질과 안전의 게이트가 된다. 라운드마다 남는 spec·plan·완료노트·교본은 결정의 근거를 기록해서, 나중에 왜 이렇게 만들었는지 설명할 수 있게 해 준다.
+A. 코드 대부분을 에이전트(Claude)가 쓰므로, 사람이 확인하는 지점(spec·계획서 확인·dev 머지 승인·main 머지 승인)이 품질과 안전의 게이트가 된다. 라운드마다 남는 spec·plan·완료노트·교본은 결정의 근거를 기록해서, 나중에 왜 이렇게 만들었는지 설명할 수 있게 해 준다.
 
 - [x] **Step 2: 교본이 실제 파일과 같은지 확인**
 
@@ -1385,6 +1385,10 @@ git add docs/roadmap/round00-완료노트.md
 git commit -m "[Docs] round00 — 완료노트 상태: dev 머지 승인 체크"
 git push origin dev
 ```
+
+- [ ] **Step 2a: [승인 뒤] 수정분 재머지**
+
+첫 `dev` 머지 뒤 사용자 승인으로 `CLAUDE.md`·`GIT_WORKFLOW.md`를 고친 경우(round00에서 실제로 있었다): 작업 브랜치를 `dev`에 맞춘(`git merge --ff-only dev`) 뒤 고치고, code-reviewer 확인과 CI green을 거쳐 사용자 승인을 받아 Step 1과 같은 방식으로 다시 `--no-ff` 머지한다. 그 뒤 `dev`에서 완료노트 「상태」의 리뷰·CI 줄을 최종 커밋 기준으로 고친다.
 
 - [ ] **Step 3: [승인 뒤] 라운드 종료**
 
