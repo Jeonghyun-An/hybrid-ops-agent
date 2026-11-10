@@ -54,9 +54,9 @@ plan: `docs/superpowers/plans/2026-11-09-round00-scaffold.md`
 
 ## 상태
 - [x] code-reviewer 정적 리뷰 통과(high·medium 수정, low는 수정하거나 「결정」에 이유) — `CLAUDE.md`·`GIT_WORKFLOW.md` 수정분 재리뷰(2026-11-10)까지 high·medium 없음
-- [x] CI green(작업 브랜치 마지막 커밋) — `317bfe2`, 실행 42740553729 두 잡 success(`dev` 머지 커밋 `b846f4b`도 실행 42742511738 success)
+- [x] CI green(작업 브랜치 마지막 커밋) — `36a43af`, 실행 42754876205 두 잡 success(`dev` 재머지 커밋 `933765b`도 실행 42754942653 success)
 - [x] 수동 스모크 확인
 - [x] 문서 갱신(교본·00_status·실제로 돌려 보며 새로 겪은 함정(개발 환경 포함)을 `docs/ops/recurring-gotchas.md`에 추가)
 - [x] Azure 리소스 정지 확인(AKS를 켠 라운드만 — `az aks show -g <그룹> -n <클러스터> --query powerState.code -o tsv`가 `Stopped`. 켜지 않은 라운드는 「해당 없음」을 덧붙이고 체크) — 해당 없음
-- [x] `dev` 머지 승인
+- [x] `dev` 머지 승인 — 1차 `b846f4b`, `CLAUDE.md`·`GIT_WORKFLOW.md` 수정분 재머지 `933765b`(각각 승인)
 - [ ] `dev→main` 머지 + push 완료

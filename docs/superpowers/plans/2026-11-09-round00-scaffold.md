@@ -1386,7 +1386,7 @@ git commit -m "[Docs] round00 — 완료노트 상태: dev 머지 승인 체크"
 git push origin dev
 ```
 
-- [ ] **Step 2a: [승인 뒤] 수정분 재머지**
+- [x] **Step 2a: [승인 뒤] 수정분 재머지**
 
 첫 `dev` 머지 뒤 사용자 승인으로 `CLAUDE.md`·`GIT_WORKFLOW.md`를 고친 경우(round00에서 실제로 있었다): 작업 브랜치를 `dev`에 맞춘(`git merge --ff-only dev`) 뒤 고치고, code-reviewer 확인과 CI green을 거쳐 사용자 승인을 받아 Step 1과 같은 방식으로 다시 `--no-ff` 머지한다. 그 뒤 `dev`에서 완료노트 「상태」의 리뷰·CI 줄을 최종 커밋 기준으로 고친다.
 
