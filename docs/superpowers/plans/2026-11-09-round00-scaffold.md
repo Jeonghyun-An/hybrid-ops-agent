@@ -536,16 +536,17 @@ Expected: `No such file or directory`
 - 디버그 로그·비밀값·kubeconfig·Terraform state는 커밋하지 않는다(`.gitignore`). 비밀값은 SOPS로 암호화한 파일만 커밋한다.
 
 ## 3. 개발 어휘 — round
-- **round**: 사용자 프롬프트 1개 → 구현 → 리뷰 → dev 머지(사용자 승인) → dev→main 머지 + push까지가 한 라운드. 라운드당 spec 1(브레인스토밍) + 완료노트 1 + 교본(가이드) 1권.
+- **round**: 사용자 프롬프트 1개 → spec → 계획 → 구현 → 리뷰 → 검증 → 교본·완료노트 → dev 머지(사용자 승인) → dev→main 머지 + push(사용자 승인)까지가 한 라운드. 라운드당 spec 1(브레인스토밍) + plan 1 + 완료노트 1 + 교본(가이드) 1권.
 - 라운드 번호는 2자리(`round00`, `round01`…). 성격이 다른 여러 덩어리로 쪼개지면 소문자 접미(`round02a`, `round02b`…)를 붙인다. 접미는 성격 라벨이며 실행 순서가 아니다.
 - 브랜치명은 영문 kebab-case만 사용한다(Windows·CI 호환성 — 한글 브랜치명 금지).
-- 커밋 메시지는 `[Type] 한국어 설명` 한 줄. `Co-Authored-By` 트레일러와 "Generated with" 문구는 넣지 않는다(단독 저자 — 도구의 기본 지침보다 이 규칙이 우선).
+- 커밋 메시지는 `[Type] 한국어 설명` 제목 한 줄(본문은 꼭 필요할 때만 몇 줄). `Co-Authored-By` 트레일러와 "Generated with" 문구는 넣지 않는다(단독 저자 — 도구의 기본 지침보다 이 규칙이 우선). 머지 커밋만 예외로 `Merge <브랜치> into <대상> — round<NN> (<요약>)` 형식을 쓴다.
+- 라운드 흐름의 사용자 확인 지점은 spec·계획서·`dev` 머지·`dev→main` 머지 네 곳이다(비용이 나는 Azure 작업 승인은 §4대로 따로 받는다). 계획서는 파일 자체를 보내 먼저 보여 준다 — 채팅 요약으로 대신하지 않는다. 작업 브랜치와 `dev`의 일반 push는 따로 묻지 않는다(CI는 push에서 돈다). 강제 push와 원격 브랜치 삭제는 묻는다. `main` push는 라운드 종료 승인 뒤에만 한다.
 - 생애주기·브랜치 모델·커밋 규칙 상세: `GIT_WORKFLOW.md`.
 
 ## 4. 세션 시작 시 확인
 - 새 세션(=새 라운드)을 열면 먼저 `docs/roadmap/00_status.md`(현재 상태·다음 할 일)와 직전 라운드 완료노트(`docs/roadmap/round<NN>-완료노트.md`)를 읽어 맥락을 이어받는다.
 - 문서와 코드가 어긋나면 코드가 실제이니 문서를 고친다.
-- 클러스터·배포·Azure 작업 전에는 `docs/ops/recurring-gotchas.md`를 먼저 확인한다 — 라이브에서만 드러나는 버그가 많다.
+- 클러스터·배포·Azure 작업이나 개발 환경 설정(devcontainer 구성, 줄 끝·훅·safe.directory 같은 git 설정)을 바꾸기 전에는 `docs/ops/recurring-gotchas.md`를 먼저 확인한다 — 실제로 돌려 봐야만 드러나는 버그가 많다.
 - Azure 리소스를 만들거나 켜는 작업(`terraform apply`, `az aks start`)은 비용이 나므로 사용자 승인 뒤에만 한다. 작업이 끝나면 `az aks stop`까지가 그 작업이다.
 
 ## 5. 어디를 보나
@@ -554,12 +555,12 @@ Expected: `No such file or directory`
 | 브랜치·커밋·품질 게이트·라운드 생애주기·개발 환경 | `GIT_WORKFLOW.md` |
 | 현재 상태·다음 할 일 | `docs/roadmap/00_status.md` |
 | 라운드 완료 기록 | `docs/roadmap/round<NN>-완료노트.md` |
-| 라운드 교본(클론코딩 + 면접 Q&A) | `docs/guides/round<NN>/` |
+| 라운드 교본(개념 입문 + 클론코딩 + 면접 Q&A) | `docs/guides/round<NN>/` |
 | 전체 설계·라운드 로드맵 | `docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md` |
 | 기능 설계(브레인스토밍 spec) | `docs/superpowers/specs/` |
 | 구현 계획(writing-plans) | `docs/superpowers/plans/` |
 | 코딩 표준 | `docs/standards/coding-standard.md` |
-| 반복 함정(라이브에서만 드러나는 버그) | `docs/ops/recurring-gotchas.md` |
+| 반복 함정(실제로 돌려 봐야만 드러나는 버그) | `docs/ops/recurring-gotchas.md` |
 | 라운드 종료 절차 자동화 | `.claude/skills/round-finish/SKILL.md` |
 | 정적 코드 리뷰 서브에이전트 | `.claude/agents/code-reviewer.md` |
 | 프로젝트 소개·시작하기 | `README.md` |
@@ -615,7 +616,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 ```
 
 1. `dev`에서 작업 브랜치 분기
-2. 개발 → 커밋 → 원격 push. 솔로 작업이라도 작업 브랜치를 push한다 — CI는 push에서 돈다.
+2. 개발 → 커밋 → 원격 push. 솔로 작업이라도 작업 브랜치를 push한다 — CI는 push에서 돈다. 일반 push는 따로 승인받지 않는다(§머지 승인 규칙).
 3. 완성되면 리뷰(서브에이전트 정적 리뷰 + 자가 점검) → 사용자 승인을 받은 뒤 `dev`로 `--no-ff` 머지 (승인 전 머지 금지)
 4. `dev` push
 5. 라운드 종료(사용자 승인): `dev → main` 머지 + `origin` push
@@ -625,6 +626,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 - 작업 브랜치 → `dev`: 매번 사용자 채팅 승인 필수. 리뷰 게이트는 (1) `.claude/agents/code-reviewer.md` 서브에이전트의 정적 리뷰와 (2) 자가 점검 체크리스트(CI green + 관련 기능 수동 스모크 + 문서 갱신 여부)를 순서대로 통과하는 것이다.
 - 리뷰 발견 처리: high·medium은 모두 고친다. low는 고치거나, 고치지 않는 이유를 완료노트 「결정」에 한 줄로 적는다. 고친 뒤에는 CI를 다시 확인한다.
 - `dev` → `main`: 라운드 종료 판단·승인은 사용자. round02부터는 `main` push가 곧 배포다.
+- push: 작업 브랜치와 `dev`의 일반 push는 Claude가 따로 묻지 않고 한다. 강제 push와 원격 브랜치 삭제는 묻는다. `main` push는 위 라운드 종료 승인 없이는 하지 않는다. 라운드 흐름에서 사용자가 확인하는 지점은 spec·계획서(§라운드 생애주기 1·2)와 위 두 머지다 — 비용이 나는 Azure 작업 승인(`CLAUDE.md` §4)은 별도다.
 
 ## 커밋 메시지
 
@@ -674,8 +676,8 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 
 ## 라운드 생애주기
 
-1. 프롬프트→spec: `docs/superpowers/specs/`에 브레인스토밍 설계 작성(브레인스토밍 스킬).
-2. 계획: `docs/superpowers/plans/`에 구현 계획 작성(writing-plans 스킬).
+1. 프롬프트→spec: `docs/superpowers/specs/`에 브레인스토밍 설계 작성(브레인스토밍 스킬) → 사용자 확인 뒤 계획으로 넘어간다.
+2. 계획: `docs/superpowers/plans/`에 구현 계획 작성(writing-plans 스킬) → 계획서 파일 자체를 사용자에게 보내(채팅 요약으로 대신하지 않는다) 확인받은 뒤 구현한다.
 3. 구현: TDD(`docs/standards/coding-standard.md`).
 4. 리뷰: `.claude/agents/code-reviewer.md` 서브에이전트로 정적 리뷰 → 발견 처리(§머지 승인 규칙).
 5. 검증: CI green + 관련 기능 수동 스모크(round01부터 평가 러너 시나리오 포함).
@@ -1213,7 +1215,7 @@ git commit -m "[Docs] round00 — 00_status: 현재 상태(round00 진행 중)·
 
 ### Task 15: 원격 첫 push와 CI 확인 — **사용자 승인 필요**
 
-public 저장소에 처음 올리는 단계다. 시작 전에 사용자에게 "로컬 검증이 끝났으니 `main`·`dev`·`feat/round00-scaffold`를 push해도 되는지" 묻고 승인을 받는다.
+public 저장소에 처음 올리는 단계다(첫 공개 push라 예외로 승인을 받는다 — 그 뒤의 push 규칙은 `CLAUDE.md` §3). 시작 전에 사용자에게 "로컬 검증이 끝났으니 `main`·`dev`·`feat/round00-scaffold`를 push해도 되는지" 묻고 승인을 받는다.
 
 - [x] **Step 1: 로컬 전체 검증**
 
@@ -1324,7 +1326,7 @@ A. 검사할 Helm 차트나 Terraform 파일이 아직 없으면 그 게이트�
 
 **Q9. 혼자 하는 프로젝트인데 브랜치·리뷰·승인 절차를 지키는 이유는?**
 
-A. 코드 대부분을 에이전트(Claude)가 쓰므로, 사람이 확인하는 지점(dev 머지 승인·main 머지 승인)이 품질과 안전의 게이트가 된다. 라운드마다 남는 spec·plan·완료노트·교본은 결정의 근거를 기록해서, 나중에 왜 이렇게 만들었는지 설명할 수 있게 해 준다.
+A. 코드 대부분을 에이전트(Claude)가 쓰므로, 사람이 확인하는 지점(spec·계획서 확인·dev 머지 승인·main 머지 승인)이 품질과 안전의 게이트가 된다. 라운드마다 남는 spec·plan·완료노트·교본은 결정의 근거를 기록해서, 나중에 왜 이렇게 만들었는지 설명할 수 있게 해 준다.
 
 - [x] **Step 2: 교본이 실제 파일과 같은지 확인**
 
@@ -1383,6 +1385,10 @@ git add docs/roadmap/round00-완료노트.md
 git commit -m "[Docs] round00 — 완료노트 상태: dev 머지 승인 체크"
 git push origin dev
 ```
+
+- [ ] **Step 2a: [승인 뒤] 수정분 재머지**
+
+첫 `dev` 머지 뒤 사용자 승인으로 `CLAUDE.md`·`GIT_WORKFLOW.md`를 고친 경우(round00에서 실제로 있었다): 작업 브랜치를 `dev`에 맞춘(`git merge --ff-only dev`) 뒤 고치고, code-reviewer 확인과 CI green을 거쳐 사용자 승인을 받아 Step 1과 같은 방식으로 다시 `--no-ff` 머지한다. 그 뒤 `dev`에서 완료노트 「상태」의 리뷰·CI 줄을 최종 커밋 기준으로 고친다.
 
 - [ ] **Step 3: [승인 뒤] 라운드 종료**
 
