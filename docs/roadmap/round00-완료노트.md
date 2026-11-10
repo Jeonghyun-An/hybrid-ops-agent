@@ -59,4 +59,4 @@ plan: `docs/superpowers/plans/2026-11-09-round00-scaffold.md`
 - [x] 문서 갱신(교본·00_status·실제로 돌려 보며 새로 겪은 함정(개발 환경 포함)을 `docs/ops/recurring-gotchas.md`에 추가)
 - [x] Azure 리소스 정지 확인(AKS를 켠 라운드만 — `az aks show -g <그룹> -n <클러스터> --query powerState.code -o tsv`가 `Stopped`. 켜지 않은 라운드는 「해당 없음」을 덧붙이고 체크) — 해당 없음
 - [x] `dev` 머지 승인 — 1차 `b846f4b`, `CLAUDE.md`·`GIT_WORKFLOW.md` 수정분 재머지 `933765b`(각각 승인)
-- [ ] `dev→main` 머지 + push 완료
+- [x] `dev→main` 머지 + push 완료 — `main` 머지 커밋 `914ab6b`, 실행 42755703586 두 잡 success
