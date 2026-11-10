@@ -21,7 +21,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 ```
 
 1. `dev`에서 작업 브랜치 분기
-2. 개발 → 커밋 → 원격 push. 솔로 작업이라도 작업 브랜치를 push한다 — CI는 push에서 돈다. push는 따로 승인받지 않는다(§머지 승인 규칙).
+2. 개발 → 커밋 → 원격 push. 솔로 작업이라도 작업 브랜치를 push한다 — CI는 push에서 돈다. 일반 push는 따로 승인받지 않는다(§머지 승인 규칙).
 3. 완성되면 리뷰(서브에이전트 정적 리뷰 + 자가 점검) → 사용자 승인을 받은 뒤 `dev`로 `--no-ff` 머지 (승인 전 머지 금지)
 4. `dev` push
 5. 라운드 종료(사용자 승인): `dev → main` 머지 + `origin` push
@@ -31,7 +31,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 - 작업 브랜치 → `dev`: 매번 사용자 채팅 승인 필수. 리뷰 게이트는 (1) `.claude/agents/code-reviewer.md` 서브에이전트의 정적 리뷰와 (2) 자가 점검 체크리스트(CI green + 관련 기능 수동 스모크 + 문서 갱신 여부)를 순서대로 통과하는 것이다.
 - 리뷰 발견 처리: high·medium은 모두 고친다. low는 고치거나, 고치지 않는 이유를 완료노트 「결정」에 한 줄로 적는다. 고친 뒤에는 CI를 다시 확인한다.
 - `dev` → `main`: 라운드 종료 판단·승인은 사용자. round02부터는 `main` push가 곧 배포다.
-- push는 승인 대상이 아니다 — 작업 브랜치와 `dev`는 Claude가 push한다. `main` push는 위 라운드 종료 승인에 포함된다. 사용자가 확인하는 지점은 spec·계획서(§라운드 생애주기 1·2)와 위 두 머지다.
+- push: 작업 브랜치와 `dev`의 일반 push는 Claude가 따로 묻지 않고 한다. 강제 push와 원격 브랜치 삭제는 묻는다. `main` push는 위 라운드 종료 승인 없이는 하지 않는다. 라운드 흐름에서 사용자가 확인하는 지점은 spec·계획서(§라운드 생애주기 1·2)와 위 두 머지다 — 비용이 나는 Azure 작업 승인(`CLAUDE.md` §4)은 별도다.
 
 ## 커밋 메시지
 
@@ -82,7 +82,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 ## 라운드 생애주기
 
 1. 프롬프트→spec: `docs/superpowers/specs/`에 브레인스토밍 설계 작성(브레인스토밍 스킬) → 사용자 확인 뒤 계획으로 넘어간다.
-2. 계획: `docs/superpowers/plans/`에 구현 계획 작성(writing-plans 스킬) → 계획서 파일을 사용자에게 문서로 보여 주고 확인받은 뒤 구현한다.
+2. 계획: `docs/superpowers/plans/`에 구현 계획 작성(writing-plans 스킬) → 계획서 파일 자체를 사용자에게 보내(채팅 요약으로 대신하지 않는다) 확인받은 뒤 구현한다.
 3. 구현: TDD(`docs/standards/coding-standard.md`).
 4. 리뷰: `.claude/agents/code-reviewer.md` 서브에이전트로 정적 리뷰 → 발견 처리(§머지 승인 규칙).
 5. 검증: CI green + 관련 기능 수동 스모크(round01부터 평가 러너 시나리오 포함).

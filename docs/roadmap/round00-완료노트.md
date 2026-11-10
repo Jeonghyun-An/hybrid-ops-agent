@@ -24,13 +24,14 @@ plan: `docs/superpowers/plans/2026-11-09-round00-scaffold.md`
 - 실측으로 바꾼 것: `astral-sh/setup-uv@v10.3.3`(v8부터 메이저 태그 없음), devcontainer 이미지 `3-` 태그(만료된 Yarn 키, 함정 2번), uv는 `pipx`로 설치, 컨테이너 venv는 `UV_PROJECT_ENVIRONMENT`로 작업 폴더 밖, `safe.directory`는 `--system`, 커밋은 호스트에서(CRLF 훅, 함정 3번).
 - uv 버전을 `[tool.uv] required-version = ">=0.11.31,<0.12"`로 묶었다(리뷰 지적) — CI의 setup-uv가 이 값을 읽어 0.11.33을 설치한 것을 로그로 확인했다.
 - 교본에 「개념 입문」 절을 더했다 — 학습 프로젝트라 처음 보는 분야도 익힐 수 있게 하라는 사용자 요청(2026-11-10). 템플릿 절 번호가 한 칸씩 밀렸다(구현 3, 검증 4, Q&A 5).
-- push는 2026-11-10 사용자가 `git push` 권한을 허용해 Claude가 했다. 사용자 승인을 받아 이 규칙을 `CLAUDE.md`·`GIT_WORKFLOW.md`에 적었다 — 사용자 확인 지점은 spec·계획서(문서로 먼저 보여 준다)·`dev` 머지·`dev→main` 머지이고, 작업 브랜치·`dev` push는 묻지 않으며 `main` push는 라운드 종료 승인 뒤에만 한다.
+- push는 2026-11-10 사용자가 `git push` 권한을 허용해 Claude가 했다. 사용자 승인을 받아 이 규칙을 `CLAUDE.md`·`GIT_WORKFLOW.md`에 적었다 — 사용자 확인 지점은 spec·계획서(파일 자체를 먼저 보낸다)·`dev` 머지·`dev→main` 머지이고(비용이 나는 Azure 작업 승인은 별도), 작업 브랜치·`dev`의 일반 push는 묻지 않되 강제 push·원격 브랜치 삭제는 묻고, `main` push는 라운드 종료 승인 뒤에만 한다.
 - Task 16 리뷰에서 고치지 않은 low와 이유:
   - CI 액션 커밋 SHA 고정·gitleaks 바이너리 체크섬 — Azure 자격 증명이 워크플로에 들어오는 round03 전에 Dependabot과 함께 한다.
   - devcontainer 안 kubectl·helm·terraform·az 버전 고정 — 그 도구를 실제로 쓰는 라운드(round01~03)에 고정한다.
   - code-reviewer 보안 점검에 쓰기 감사 로그·토큰 상한 — 그 기능이 들어오는 라운드(round06·round07)에 더한다.
   - `.gitignore`의 `k3s.yaml`이 저장소 어디서나 걸림 — round02에서 그 이름의 매니페스트를 피하거나 패턴을 좁힌다.
-- `CLAUDE.md` 쪽 리뷰 지적 3건(머지 커밋 형식 예외 — medium, 반복 함정의 표현과 읽을 시점, round 정의 축약)은 처음에 Claude Code 자동 모드가 `CLAUDE.md` 수정을 막아 미뤘다. 사용자 허락(2026-11-10)을 받아 `dev` 첫 머지 뒤 작업 브랜치에서 고쳤고, 재머지 승인을 받아 다시 `dev`에 머지한다.
+- `CLAUDE.md` 쪽 리뷰 지적 3건(머지 커밋 형식 예외 — medium, 반복 함정의 표현과 읽을 시점, round 정의 축약)은 처음에 Claude Code 자동 모드가 `CLAUDE.md` 수정을 막아 미뤘다. 사용자 허락(2026-11-10)을 받아 `dev` 첫 머지 뒤 작업 브랜치에서 고쳤고, 재머지 승인을 받아 다시 `dev`에 머지한다. 그 수정의 재리뷰에서 나온 보완(확인 지점 「네 곳」이 Azure 비용 승인까지 없앤 것으로 읽히는 문제 — medium, push 범위, 계획서를 보여 주는 방식, 커밋 본문 허용, 반복 함정을 읽을 시점)도 사용자 승인을 받아 같이 넣었다.
+- `CLAUDE.md` §3의 「비용이 나는 Azure 작업 승인은 §4대로」가 가리키는 §4는 아직 리소스를 만들거나 켜는 작업만 다룬다(low) — Azure OpenAI 대량 호출의 비용 승인 규칙을 정하는 round01에 §4에 넣어 참조가 맞게 한다.
 - `CLAUDE.md`와 `GIT_WORKFLOW.md`에 확인 지점·push·머지 커밋 규칙이 거의 같은 문장으로 들어 있다(low, 중복) — 사용자가 두 파일 모두에 적도록 승인했으므로 그대로 둔다. 한쪽을 고칠 때는 다른 쪽도 같이 고친다.
 
 ## 수치
@@ -43,7 +44,7 @@ plan: `docs/superpowers/plans/2026-11-09-round00-scaffold.md`
 
 ## 이월
 - 교본 대조 스크립트(교본 코드블록을 뽑아 실제 파일과 diff)를 `scripts/`의 재사용 도구로 둘지 — round01 교본 때 정한다.
-- round01: devcontainer 안에서 kind kubeconfig(`127.0.0.1`)가 닿지 않는 문제, Azure OpenAI 대량 호출 비용 승인 규칙, 멤버별 이미지는 `uv sync --locked --package <멤버> --no-dev`로 빌드, devcontainer의 kubectl 버전 고정.
+- round01: devcontainer 안에서 kind kubeconfig(`127.0.0.1`)가 닿지 않는 문제, Azure OpenAI 대량 호출 비용 승인 규칙(`CLAUDE.md` §4에 넣는다), 멤버별 이미지는 `uv sync --locked --package <멤버> --no-dev`로 빌드, devcontainer의 kubectl 버전 고정.
 - round02: Helm `templates/`를 check-yaml에서 제외, `k3s.yaml` 무시 패턴, SOPS 암호화 파일 예외 규칙, 접미 라운드(`round02a`…) 완료노트 파일명 규칙, devcontainer의 helm 버전 고정.
 - round03: CI 액션 SHA 고정 + Dependabot + gitleaks 체크섬, devcontainer의 terraform·az 버전 고정.
 - round06·round07: code-reviewer 보안 점검에 쓰기 감사 로그·토큰 상한을 더한다.
@@ -52,7 +53,7 @@ plan: `docs/superpowers/plans/2026-11-09-round00-scaffold.md`
 - round01 — 끝-끝 경로. 착수 전 Azure 구독과 Azure OpenAI 배포 모델·리전 결정(spec §10), 개발 PC에 kind 설치.
 
 ## 상태
-- [ ] code-reviewer 정적 리뷰 통과(high·medium 수정, low는 수정하거나 「결정」에 이유) — `CLAUDE.md` 쪽 medium 1건이 사용자 허락 대기(「결정」)
+- [x] code-reviewer 정적 리뷰 통과(high·medium 수정, low는 수정하거나 「결정」에 이유) — `CLAUDE.md`·`GIT_WORKFLOW.md` 수정분 재리뷰(2026-11-10)까지 high·medium 없음
 - [x] CI green(작업 브랜치 마지막 커밋) — `317bfe2`, 실행 42740553729 두 잡 success(`dev` 머지 커밋 `b846f4b`도 실행 42742511738 success)
 - [x] 수동 스모크 확인
 - [x] 문서 갱신(교본·00_status·실제로 돌려 보며 새로 겪은 함정(개발 환경 포함)을 `docs/ops/recurring-gotchas.md`에 추가)
