@@ -30,7 +30,8 @@ plan: `docs/superpowers/plans/2026-11-09-round00-scaffold.md`
   - devcontainer 안 kubectl·helm·terraform·az 버전 고정 — 그 도구를 실제로 쓰는 라운드(round01~03)에 고정한다.
   - code-reviewer 보안 점검에 쓰기 감사 로그·토큰 상한 — 그 기능이 들어오는 라운드(round06·round07)에 더한다.
   - `.gitignore`의 `k3s.yaml`이 저장소 어디서나 걸림 — round02에서 그 이름의 매니페스트를 피하거나 패턴을 좁힌다.
-- `CLAUDE.md` 쪽 리뷰 지적 3건(머지 커밋 형식 예외 — medium, 반복 함정의 표현과 읽을 시점, round 정의 축약)은 처음에 Claude Code 자동 모드가 `CLAUDE.md` 수정을 막아 미뤘다. 사용자 허락(2026-11-10)을 받아 `dev` 첫 머지 뒤 작업 브랜치에서 고치고 다시 머지했다.
+- `CLAUDE.md` 쪽 리뷰 지적 3건(머지 커밋 형식 예외 — medium, 반복 함정의 표현과 읽을 시점, round 정의 축약)은 처음에 Claude Code 자동 모드가 `CLAUDE.md` 수정을 막아 미뤘다. 사용자 허락(2026-11-10)을 받아 `dev` 첫 머지 뒤 작업 브랜치에서 고쳤고, 재머지 승인을 받아 다시 `dev`에 머지한다.
+- `CLAUDE.md`와 `GIT_WORKFLOW.md`에 확인 지점·push·머지 커밋 규칙이 거의 같은 문장으로 들어 있다(low, 중복) — 사용자가 두 파일 모두에 적도록 승인했으므로 그대로 둔다. 한쪽을 고칠 때는 다른 쪽도 같이 고친다.
 
 ## 수치
 (평가 러너·RAGAS·지연·비용처럼 이 라운드에서 잰 값. 잰 것이 없으면 "없음". 사람 검증 없이 LLM 채점만 거친 수치는 그렇다고 적는다.)

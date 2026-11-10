@@ -81,7 +81,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 
 ## 라운드 생애주기
 
-1. 프롬프트→spec: `docs/superpowers/specs/`에 브레인스토밍 설계 작성(브레인스토밍 스킬).
+1. 프롬프트→spec: `docs/superpowers/specs/`에 브레인스토밍 설계 작성(브레인스토밍 스킬) → 사용자 확인 뒤 계획으로 넘어간다.
 2. 계획: `docs/superpowers/plans/`에 구현 계획 작성(writing-plans 스킬) → 계획서 파일을 사용자에게 문서로 보여 주고 확인받은 뒤 구현한다.
 3. 구현: TDD(`docs/standards/coding-standard.md`).
 4. 리뷰: `.claude/agents/code-reviewer.md` 서브에이전트로 정적 리뷰 → 발견 처리(§머지 승인 규칙).
