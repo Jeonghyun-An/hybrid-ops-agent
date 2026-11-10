@@ -169,6 +169,7 @@ Python 패키지(`agent`·`mcp_servers`·`graphrag`·`demo_app`·`eval`)는 uv �
 - code-reviewer 에이전트에 인프라 점검을 더한다: Terraform plan 변화, RBAC 최소 권한, 비밀값 커밋 여부, 이미지 태그 고정.
 - CI 게이트: ruff, pytest, gitleaks(round00), `helm lint`·kubeconform(round02), `terraform fmt -check`·`terraform validate`(round03). 검사 대상 파일이 처음 생기는 라운드에 그 게이트를 더한다 — 대상 없는 검사는 아무것도 증명하지 못한다.
 - 개발 PC가 바뀌어도 되도록 개발 환경은 uv + devcontainer로 재현한다.
+- 교본에 「개념 입문」 절을 더한다 — 학습 프로젝트라 라운드마다 처음 나온 개념을 기초부터 정리한다(2026-11-10 사용자 요청).
 
 ## 9. 안전·테스트·비용
 
