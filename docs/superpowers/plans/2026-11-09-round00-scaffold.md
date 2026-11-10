@@ -669,7 +669,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 ## 개발 가이드 문서 (필수)
 
 - 1 라운드 = 1 교본(가이드). `docs/guides/round<NN>/`에 저장(템플릿: `docs/guides/_TEMPLATE.md`).
-- 구성: paraphrase된 라운드 프롬프트 → 전 코드/문서 클론코딩 가능하게 수록(발췌·플레이스홀더 금지) → 면접식 Q&A.
+- 구성: paraphrase된 라운드 프롬프트 → 설계 요약 → 개념 입문(이 라운드에 처음 나온 개념을 기초부터) → 전 코드/문서 클론코딩 가능하게 수록(발췌·플레이스홀더 금지) → 검증 → 면접식 Q&A.
 - 리뷰 흐름: 작업 브랜치 push → 교본↔실제 파일 대조(교본의 코드블록을 뽑아 실제 파일과 diff한다 — 제목 수만 세지 않는다. 그다음 `.claude/agents/code-reviewer.md`로 한 번 더 본다. 리뷰어는 git을 실행하지 않으므로 대조할 파일 목록은 호출하는 쪽이 넘긴다) → 승인 → `dev` 머지.
 
 ## 라운드 생애주기
@@ -917,20 +917,27 @@ plan: `docs/superpowers/plans/<파일>`
 ## 1. 설계 요약
 (spec 링크: `docs/superpowers/specs/<파일>` — 이 라운드에서 내린 결정과 그 이유를 적는다)
 
-## 2. 구현 (클론코딩)
-### 2.1 <파일/컴포넌트명>
+## 2. 개념 입문
+(이 라운드에 처음 나온 개념을 기초부터 적는다 — 개념마다 쉬운 정의 한두 문장과, 이 저장소에서 실제로 쓴 곳)
+### 2.1 <개념>
+<쉬운 정의>
+
+**여기서는**: <이 저장소에서 쓴 곳>
+
+## 3. 구현 (클론코딩)
+### 3.1 <파일/컴포넌트명>
 **파일**: `<경로>`
 
 ```<언어>
 <전체 코드 — 발췌 금지>
 ```
 
-*(필요한 만큼 2.2, 2.3 … 반복. 담을 파일 내용에 코드펜스(```)가 이미 들어있으면 바깥 펜스를 4개 백틱(````)이나 `~~~~`로 써서 조기 종료를 막는다.)*
+*(필요한 만큼 3.2, 3.3 … 반복. 담을 파일 내용에 코드펜스(```)가 이미 들어있으면 바깥 펜스를 4개 백틱(````)이나 `~~~~`로 써서 조기 종료를 막는다.)*
 
-## 3. 검증
+## 4. 검증
 - 실행 명령과 기대 출력을 그대로 적는다.
 
-## 4. 면접식 Q&A
+## 5. 면접식 Q&A
 **Q1. <질문>**
 
 A. <답변>
@@ -1219,7 +1226,7 @@ git status --short
 ```
 Expected: 모든 훅 `Passed`, `2 passed`, `git status --short` 출력 없음(커밋 안 된 변경 없음).
 
-- [ ] **Step 2: [승인 뒤] push — `main`을 먼저 올려 기본 브랜치로 만든다**
+- [x] **Step 2: [승인 뒤] push — `main`을 먼저 올려 기본 브랜치로 만든다**
 
 Run:
 ```bash
@@ -1230,7 +1237,7 @@ gh repo view Jeonghyun-An/hybrid-ops-agent --json defaultBranchRef --jq .default
 ```
 Expected: 세 push 성공, 기본 브랜치 `main`. 다르게 나오면 `gh repo edit Jeonghyun-An/hybrid-ops-agent --default-branch main`.
 
-- [ ] **Step 3: CI 결과 확인**
+- [x] **Step 3: CI 결과 확인**
 
 Run:
 ```bash
@@ -1253,7 +1260,7 @@ Expected: `린트·테스트`·`비밀값 검사(gitleaks, 전체 이력)` 두 �
 - 영역 A(코드·설정): `pyproject.toml`·`agent/`·`uv.lock`(의존성만)·`.pre-commit-config.yaml`·`.github/workflows/ci.yml`·`.devcontainer/devcontainer.json`·`.gitattributes`·`.gitignore`. 기준: spec §7 round00 행, 이 plan Task 1~5.
 - 영역 B(문서): `CLAUDE.md`·`GIT_WORKFLOW.md`·`README.md`·`docs/standards/`·`docs/ops/`·`docs/roadmap/`·`docs/guides/_TEMPLATE.md`·`.claude/`. 기준: spec §8, 문서 간 어휘·경로·결정 정합.
 
-- [ ] **Step 2: 발견 반영**
+- [x] **Step 2: 발견 반영**
 
 high·medium은 모두 고친다. low는 고치거나, 고치지 않는 이유를 완료노트 「결정」에 한 줄로 적는다. 고친 것마다 커밋한다(`[Fix] round00 — <무엇을>`). 고친 뒤 Task 15 Step 1의 로컬 검증을 다시 돌리고 `git push`로 CI를 다시 확인한다.
 
@@ -1268,18 +1275,20 @@ high·medium은 모두 고친다. low는 고치거나, 고치지 않는 이유�
 
 - [ ] **Step 1: 교본 작성 — `docs/guides/round00/00-개요.md`**
 
-`docs/guides/_TEMPLATE.md` 구성을 따른다. 「2. 구현」에는 아래 파일을 **최종 커밋 상태 그대로**(리뷰 수정 반영본) 순서대로 한 절씩 싣는다. 내용은 손으로 옮기지 말고 `cat <파일>` 출력을 그대로 붙인다. 코드펜스가 들어 있는 파일(`GIT_WORKFLOW.md`·`README.md`·`docs/guides/_TEMPLATE.md`·`.claude/skills/round-finish/SKILL.md`)은 바깥 펜스를 `~~~~`로 쓴다.
+`docs/guides/_TEMPLATE.md` 구성을 따른다. 「3. 구현」에는 아래 파일을 **최종 커밋 상태 그대로**(리뷰 수정 반영본) 순서대로 한 절씩 싣는다. 내용은 손으로 옮기지 말고 `cat <파일>` 출력을 그대로 붙인다. 코드펜스가 들어 있는 파일(`GIT_WORKFLOW.md`·`README.md`·`docs/guides/_TEMPLATE.md`·`.claude/skills/round-finish/SKILL.md`)은 바깥 펜스를 `~~~~`로 쓴다.
 
-순서: `.gitattributes` → `.gitignore` → `.python-version` → `pyproject.toml` → `agent/pyproject.toml` → `agent/src/hoa_agent/__init__.py` → `agent/src/hoa_agent/cli.py` → `agent/tests/test_cli.py` → `.pre-commit-config.yaml` → `.github/workflows/ci.yml` → `.devcontainer/devcontainer.json` → `CLAUDE.md` → `GIT_WORKFLOW.md` → `docs/standards/coding-standard.md` → `docs/ops/recurring-gotchas.md` → `docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md` → `docs/guides/_TEMPLATE.md` → `.claude/agents/code-reviewer.md` → `.claude/skills/round-finish/SKILL.md` → `README.md`. (`uv.lock`은 생성물이라 싣지 않고 「3. 검증」에 `uv sync`로 생성된다고 적는다.)
+순서: `.gitattributes` → `.gitignore` → `.python-version` → `pyproject.toml` → `agent/pyproject.toml` → `agent/src/hoa_agent/__init__.py` → `agent/src/hoa_agent/cli.py` → `agent/tests/test_cli.py` → `.pre-commit-config.yaml` → `.github/workflows/ci.yml` → `.devcontainer/devcontainer.json` → `CLAUDE.md` → `GIT_WORKFLOW.md` → `docs/standards/coding-standard.md` → `docs/ops/recurring-gotchas.md` → `docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md` → `docs/guides/_TEMPLATE.md` → `.claude/agents/code-reviewer.md` → `.claude/skills/round-finish/SKILL.md` → `README.md`. (`uv.lock`은 생성물이라 싣지 않고 「4. 검증」에 `uv sync`로 생성된다고 적는다.)
 
 「0. 사용자 프롬프트」:
 > NL-Lib에서 쓰던 라운드 개발 방식을 새 프로젝트에 옮겨, 클라우드(Azure)와 온프레미스(집 RTX 3060 PC)를 함께 쓰는 에이전트 시스템을 만들고 싶다. 많이 안 해본 것 위주로 — GraphRAG, LangGraph 멀티에이전트, MCP, 쿠버네티스 + IaC, 관측·자동 평가. round00은 그 출발점으로 빈 저장소에 개발 체계와 품질 게이트를 세운다.
 
 「1. 설계 요약」: spec 링크, 그리고 이번 라운드 결정 네 가지 — (1) uv 워크스페이스 멤버 분리(이미지별 의존성), (2) 품질 게이트는 대상 파일이 있는 것만 라운드별로 도입, (3) gitleaks 이중화(pre-commit + CI 전체 이력), (4) `.gitattributes`로 LF 고정.
 
-「3. 검증」: Task 15 Step 1의 명령 4개와 실제 출력, CI 실행 결과(실행 ID와 두 잡 결론).
+「2. 개념 입문」: 이 라운드에 처음 나온 개념을 기초부터 한 절씩 적는다(쉬운 정의 + `**여기서는**:` 이 저장소에서 쓴 곳) — 패키지 매니저와 잠금 파일, 워크스페이스, 콘솔 스크립트, TDD, 린터와 포매터, Git 훅과 pre-commit, CI(GitHub Actions), 비밀값 스캐닝, 줄 끝 문자, 컨테이너와 devcontainer, `--no-ff` 머지, 공급망 보안(태그 vs 커밋 SHA). 학습 프로젝트라 처음 보는 분야도 익힐 수 있게 하라는 사용자 요청(2026-11-10)으로 더한 절이다.
 
-「4. 면접식 Q&A」 — 아래 9문항을 그대로 싣는다:
+「4. 검증」: Task 15 Step 1의 명령 4개와 실제 출력, CI 실행 결과(실행 ID와 두 잡 결론).
+
+「5. 면접식 Q&A」 — 아래 9문항을 그대로 싣는다:
 
 **Q1. 왜 Python 코드를 uv 워크스페이스의 여러 멤버로 나눴나?**
 
@@ -1319,8 +1328,8 @@ A. 코드 대부분을 에이전트(Claude)가 쓰므로, 사람이 확인하는
 
 - [ ] **Step 2: 교본이 실제 파일과 같은지 확인**
 
-Run: `grep -c '^### 2\.' docs/guides/round00/00-개요.md`
-Expected: `21` — Step 1 순서 목록의 파일 20개 + `docs/guides/_TEMPLATE.md` 본문 안에 들어 있는 `### 2.1 <파일/컴포넌트명>` 한 줄. 이어서 교본의 코드블록을 뽑아 실제 파일과 diff해 20개가 모두 같은지 확인하고(제목 수만으로는 내용 일치를 보장하지 못한다), code-reviewer(Task 16 영역 B를 한 번 더)로 한 번 더 본다. 커밋 전에는 `uv run pre-commit run ruff-format --files docs/guides/round00/00-개요.md`를 돌린 뒤 `git diff`가 비어 있는지 본다 — ruff format이 교본 안의 python 블록을 고치면 수록본이 실제 파일과 달라진다.
+Run: `grep -c '^### 3\.' docs/guides/round00/00-개요.md`
+Expected: `21` — Step 1 순서 목록의 파일 20개 + `docs/guides/_TEMPLATE.md` 본문 안에 들어 있는 `### 3.1 <파일/컴포넌트명>` 한 줄. 이어서 교본의 코드블록을 뽑아 실제 파일과 diff해 20개가 모두 같은지 확인하고(제목 수만으로는 내용 일치를 보장하지 못한다), code-reviewer(Task 16 영역 B를 한 번 더)로 한 번 더 본다. 커밋 전에는 `uv run pre-commit run ruff-format --files docs/guides/round00/00-개요.md`를 돌린 뒤 `git diff`가 비어 있는지 본다 — ruff format이 교본 안의 python 블록을 고치면 수록본이 실제 파일과 달라진다.
 
 - [ ] **Step 3: 완료노트 작성 — `docs/roadmap/round00-완료노트.md`**
 
