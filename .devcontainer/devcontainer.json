@@ -1,0 +1,30 @@
+{
+  "name": "hybrid-ops-agent",
+  "image": "mcr.microsoft.com/devcontainers/python:3-3.12-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": { "minikube": "none" },
+    "ghcr.io/devcontainers/features/terraform:1": {},
+    "ghcr.io/devcontainers/features/azure-cli:1": {}
+  },
+  "containerEnv": {
+    "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv"
+  },
+  "remoteEnv": {
+    "PATH": "/home/vscode/.venv/bin:${containerEnv:PATH}"
+  },
+  "postCreateCommand": "sudo git config --system --replace-all safe.directory ${containerWorkspaceFolder} && pipx install 'uv>=0.11.31,<0.12' && uv sync --locked",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/home/vscode/.venv/bin/python"
+      },
+      "extensions": [
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "hashicorp.terraform"
+      ]
+    }
+  }
+}

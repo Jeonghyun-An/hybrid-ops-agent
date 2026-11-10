@@ -1,0 +1,34 @@
+[project]
+name = "hybrid-ops-agent"
+version = "0.0.0"
+description = "온프레미스(k3s)와 Azure(AKS)를 함께 쓰는 쿠버네티스 운영 에이전트 — uv 워크스페이스 루트"
+requires-python = ">=3.12"
+dependencies = ["hoa-agent"]
+
+[tool.uv]
+required-version = ">=0.11.31,<0.12"
+
+[tool.uv.workspace]
+members = ["agent"]
+
+[tool.uv.sources]
+hoa-agent = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.7",
+    "pytest>=9.2",
+    "ruff==0.17.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["agent/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+testpaths = ["agent/tests"]
