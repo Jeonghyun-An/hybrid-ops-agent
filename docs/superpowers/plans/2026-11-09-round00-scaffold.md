@@ -1363,7 +1363,7 @@ Expected: CI 두 잡 green(`gh run list --branch feat/round00-scaffold --limit 1
 
 ### Task 18: 머지 — **단계마다 사용자 승인 필요**
 
-- [ ] **Step 1: [승인 뒤] 작업 브랜치 → `dev`**
+- [x] **Step 1: [승인 뒤] 작업 브랜치 → `dev`**
 
 사용자에게 리뷰 결과·CI 결과·완료노트를 요약해 보여 주고 `dev` 머지 승인을 받는다.
 
@@ -1375,7 +1375,7 @@ gh run list --branch dev --limit 1
 ```
 Expected: 머지 성공, `dev` CI green.
 
-- [ ] **Step 2: 완료노트 「상태」의 `dev` 머지 승인 체크**
+- [x] **Step 2: 완료노트 「상태」의 `dev` 머지 승인 체크**
 
 `dev` 위에서 `docs/roadmap/round00-완료노트.md`의 `- [ ] \`dev\` 머지 승인`을 `- [x]`로 바꾸고(「CI green(작업 브랜치 마지막 커밋)」 줄이 아직 비어 있으면 그 커밋의 CI 결과를 확인해 함께 체크한다) 커밋·push:
 ```bash
