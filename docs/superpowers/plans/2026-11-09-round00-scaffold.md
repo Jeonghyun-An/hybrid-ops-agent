@@ -946,7 +946,7 @@ A. <답변>
 - [x] **Step 4: 구조 확인**
 
 Run: `grep '^## ' docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md docs/guides/_TEMPLATE.md`
-Expected: 완료노트 7개(`한 일`·`결정`·`수치`·`Azure 비용`·`이월`·`다음 라운드 진입점`·`상태`), 교본 5개(`0.`~`4.`).
+Expected: 완료노트 7개(`한 일`·`결정`·`수치`·`Azure 비용`·`이월`·`다음 라운드 진입점`·`상태`), 교본 6개(`0.`~`5.`).
 
 - [x] **Step 5: 커밋**
 
@@ -1329,7 +1329,7 @@ A. 코드 대부분을 에이전트(Claude)가 쓰므로, 사람이 확인하는
 - [ ] **Step 2: 교본이 실제 파일과 같은지 확인**
 
 Run: `grep -c '^### 3\.' docs/guides/round00/00-개요.md`
-Expected: `21` — Step 1 순서 목록의 파일 20개 + `docs/guides/_TEMPLATE.md` 본문 안에 들어 있는 `### 3.1 <파일/컴포넌트명>` 한 줄. 이어서 교본의 코드블록을 뽑아 실제 파일과 diff해 20개가 모두 같은지 확인하고(제목 수만으로는 내용 일치를 보장하지 못한다), code-reviewer(Task 16 영역 B를 한 번 더)로 한 번 더 본다. 커밋 전에는 `uv run pre-commit run ruff-format --files docs/guides/round00/00-개요.md`를 돌린 뒤 `git diff`가 비어 있는지 본다 — ruff format이 교본 안의 python 블록을 고치면 수록본이 실제 파일과 달라진다.
+Expected: `21` — Step 1 순서 목록의 파일 20개 + `docs/guides/_TEMPLATE.md` 본문 안에 들어 있는 `### 3.1 <파일/컴포넌트명>` 한 줄. 이어서 교본의 코드블록을 뽑아 실제 파일과 diff해 20개가 모두 같은지 확인하고(제목 수만으로는 내용 일치를 보장하지 못한다), code-reviewer(Task 16 영역 B를 한 번 더)로 한 번 더 본다. 커밋 전에는 `uv run pre-commit run ruff-format --files docs/guides/round00/00-개요.md`를 돌린 뒤 `git diff`가 비어 있는지 본다 — ruff format이 교본 안의 python 블록을 고치면 수록본이 실제 파일과 달라진다. 구조도 확인한다 — `grep -c '^### Task'`가 `0`(plan 본문이 섞이지 않았다), `grep -c '^\*\*Q[0-9]'`가 `10`(수록된 교본 템플릿의 `**Q1. <질문>**` 1개 + 9문항), 파일 끝이 Q9 답변이다.
 
 - [ ] **Step 3: 완료노트 작성 — `docs/roadmap/round00-완료노트.md`**
 
@@ -1354,7 +1354,7 @@ Expected: `21` — Step 1 순서 목록의 파일 20개 + `docs/guides/_TEMPLATE
 
 ```bash
 git add docs/guides/round00/00-개요.md docs/roadmap/round00-완료노트.md docs/roadmap/00_status.md
-git commit -m "[Docs] round00 — 교본(전체 파일 수록 + 면접 Q&A 9문항)·완료노트·00_status 마감"
+git commit -m "[Docs] round00 — 교본(개념 입문 + 전체 파일 수록 + 면접 Q&A 9문항)·완료노트·00_status 마감"
 git push
 ```
 Expected: CI 두 잡 green(`gh run list --branch feat/round00-scaffold --limit 1`).
@@ -1377,7 +1377,7 @@ Expected: 머지 성공, `dev` CI green.
 
 - [ ] **Step 2: 완료노트 「상태」의 `dev` 머지 승인 체크**
 
-`dev` 위에서 `docs/roadmap/round00-완료노트.md`의 `- [ ] \`dev\` 머지 승인`을 `- [x]`로 바꾸고 커밋·push:
+`dev` 위에서 `docs/roadmap/round00-완료노트.md`의 `- [ ] \`dev\` 머지 승인`을 `- [x]`로 바꾸고(「CI green(작업 브랜치 마지막 커밋)」 줄이 아직 비어 있으면 그 커밋의 CI 결과를 확인해 함께 체크한다) 커밋·push:
 ```bash
 git add docs/roadmap/round00-완료노트.md
 git commit -m "[Docs] round00 — 완료노트 상태: dev 머지 승인 체크"
