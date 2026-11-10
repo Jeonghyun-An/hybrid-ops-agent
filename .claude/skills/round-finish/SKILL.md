@@ -1,0 +1,51 @@
+---
+name: round-finish
+description: hybrid-ops-agent 라운드를 종료할 때 사용 — dev에 머지된 라운드를 검증 확인 후 dev→main 머지 + origin push. "라운드 끝내자/라운드 종료/main 올리고 push" 같은 요청에 활성화. 작업 브랜치→dev 머지에는 쓰지 않는다.
+---
+
+# round-finish — 라운드 종료 절차
+
+한 라운드(사용자 프롬프트 1개의 구현)가 검증·리뷰까지 끝나 `main`에 올리고 원격에 동기화하는 절차다. 상세 흐름은 `GIT_WORKFLOW.md` §라운드 생애주기.
+
+## 전제 (확인 후 진행)
+- 작업 브랜치가 이미 `dev`에 머지돼 있다(사용자 승인 하).
+- `dev`의 CI가 green이다 — 원격 상태를 받은 뒤에 봐야 하므로 확인은 절차 6단계에서 한다.
+- 핵심 기능 수동 스모크를 확인했다.
+- 사용자가 라운드 종료를 승인했다(이 단계는 `main`을 움직이므로 임의 진행 금지). round02부터는 `main` push가 Argo CD 배포를 일으킨다.
+- **`main`·`dev` 체크아웃은 주 저장소 디렉토리에서 한다** — 라운드 작업을 격리 워크트리에서 했다면 그 워크트리 안에서 `main`을 체크아웃하지 않는다(그 라운드의 신규 파일이 아직 `main`에 없어 사라져 보이고, `main`·`dev`가 다른 워크트리에 물려 있으면 체크아웃 자체가 거부된다).
+
+## 절차
+1. 핵심 동작 수동 스모크를 확인했는지 본다(CI는 6단계에서 원격 기준으로 본다).
+2. 완료노트(`docs/roadmap/round<NN>-완료노트.md`)의 `## 상태` 체크리스트(정적 리뷰·CI·스모크·문서 갱신·Azure 정지·머지 승인) 확인.
+3. 라운드 중 실제로 돌려 보며 새로 겪은 함정(개발 환경 포함)이 있으면 `docs/ops/recurring-gotchas.md`에 추가됐는지 확인.
+4. `docs/roadmap/00_status.md` 갱신 확인(최종 갱신 날짜·현재 상태·다음 할 일·라운드 이력 — 라운드 이력만 바꾸고 현재 상태를 그대로 두지 않는다).
+5. AKS를 켠 라운드면 꺼져 있는지 확인: `az aks show -g <그룹> -n <클러스터> --query powerState.code -o tsv` → `Stopped`.
+6. **머지 전 확인** — 하나라도 어긋나면 중단하고 사용자에게 보고한다:
+   ```bash
+   git fetch origin
+   git status --porcelain                          # 출력이 있으면 중단 — 커밋 안 된 변경
+   git merge-base --is-ancestor origin/<작업 브랜치> dev && echo merged || echo 중단   # merged가 아니면 중단 — 완료노트 「브랜치:」 줄의 작업 브랜치가 dev에 머지되지 않았거나 원격에 없다
+   git rev-parse dev origin/dev                    # 두 값이 다르면 중단 — 로컬만 앞서면 dev를 push해 CI부터, 원격이 앞서면(다른 PC에서 push) 먼저 받아서 정리
+   git rev-parse main origin/main                  # 두 값이 다르면 중단 — 원격이 앞서면 먼저 받아서 정리, 로컬에만 있는 커밋이면 원인부터 확인
+   gh run list --workflow ci.yml --event push --branch dev --limit 1 --json status,conclusion,headSha
+   ```
+   마지막 명령은 `status`가 `completed`, `conclusion`이 `success`이고 `headSha`가 `git rev-parse origin/dev`와 같아야 한다 — 진행 중인 실행이나 이전 커밋의 실행을 green으로 보지 않는다.
+7. `dev → main` 머지
+   ```bash
+   git checkout main
+   git merge --no-ff dev -m "Merge dev into main — round<NN> (<요약>)"
+   ```
+8. origin push
+   ```bash
+   git push origin main
+   ```
+   (`dev`는 6단계에서 원격과 같다는 것을 확인했으므로 다시 push하지 않는다.)
+9. push 뒤 `main` CI 확인: `gh run list --workflow ci.yml --event push --branch main --limit 1 --json databaseId,headSha`에서 `headSha`가 `git rev-parse origin/main`인 실행을 `gh run watch <databaseId> --exit-status`로 끝까지 본다. push 직후라 그 실행이 아직 없으면(`headSha`가 다르면) 잠시 뒤 다시 조회한다. 실패하면 멈추고 사용자에게 보고한다(round02부터는 배포가 이미 시작됐을 수 있다).
+10. 작업 복귀: `git checkout dev`.
+11. 완료노트 「상태」의 마지막 줄(`dev→main` 머지 + push 완료)은 이 절차 뒤 `dev`에서 체크·커밋해 `dev`에만 push한다 — 그 한 줄 때문에 `main`을 다시 머지하지 않는다(다음 라운드 머지 때 함께 올라간다).
+
+## 주의
+- 평소 작업은 `dev`에서 분기 → 작업 브랜치. `main` 직접 작업은 이 종료 절차에서만.
+- 머지 충돌이나 커밋 안 된 변경이 있으면 진행하지 말고 사용자에게 보고한다.
+- 비밀정보·kubeconfig·Terraform state는 커밋·push 금지(`.gitignore`). public 저장소다.
+- round02에서 Argo CD가 들어오면 이 절차에 "push 뒤 Argo CD 동기화 상태 확인" 단계를 더한다.

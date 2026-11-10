@@ -1,0 +1,6 @@
+# 저장소 안 텍스트 파일은 작업 사본에서도 LF로 고정한다 — Windows 전역 core.autocrlf=true 를 이긴다(recurring-gotchas 1번)
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.jpg binary
+*.gif binary
