@@ -1273,7 +1273,7 @@ high·medium은 모두 고친다. low는 고치거나, 고치지 않는 이유�
 - Create: `docs/roadmap/round00-완료노트.md`
 - Modify: `docs/roadmap/00_status.md`
 
-- [ ] **Step 1: 교본 작성 — `docs/guides/round00/00-개요.md`**
+- [x] **Step 1: 교본 작성 — `docs/guides/round00/00-개요.md`**
 
 `docs/guides/_TEMPLATE.md` 구성을 따른다. 「3. 구현」에는 아래 파일을 **최종 커밋 상태 그대로**(리뷰 수정 반영본) 순서대로 한 절씩 싣는다. 내용은 손으로 옮기지 말고 `cat <파일>` 출력을 그대로 붙인다. 코드펜스가 들어 있는 파일(`GIT_WORKFLOW.md`·`README.md`·`docs/guides/_TEMPLATE.md`·`.claude/skills/round-finish/SKILL.md`)은 바깥 펜스를 `~~~~`로 쓴다.
 
@@ -1326,12 +1326,12 @@ A. 검사할 Helm 차트나 Terraform 파일이 아직 없으면 그 게이트�
 
 A. 코드 대부분을 에이전트(Claude)가 쓰므로, 사람이 확인하는 지점(dev 머지 승인·main 머지 승인)이 품질과 안전의 게이트가 된다. 라운드마다 남는 spec·plan·완료노트·교본은 결정의 근거를 기록해서, 나중에 왜 이렇게 만들었는지 설명할 수 있게 해 준다.
 
-- [ ] **Step 2: 교본이 실제 파일과 같은지 확인**
+- [x] **Step 2: 교본이 실제 파일과 같은지 확인**
 
 Run: `grep -c '^### 3\.' docs/guides/round00/00-개요.md`
 Expected: `21` — Step 1 순서 목록의 파일 20개 + `docs/guides/_TEMPLATE.md` 본문 안에 들어 있는 `### 3.1 <파일/컴포넌트명>` 한 줄. 이어서 교본의 코드블록을 뽑아 실제 파일과 diff해 20개가 모두 같은지 확인하고(제목 수만으로는 내용 일치를 보장하지 못한다), code-reviewer(Task 16 영역 B를 한 번 더)로 한 번 더 본다. 커밋 전에는 `uv run pre-commit run ruff-format --files docs/guides/round00/00-개요.md`를 돌린 뒤 `git diff`가 비어 있는지 본다 — ruff format이 교본 안의 python 블록을 고치면 수록본이 실제 파일과 달라진다. 구조도 확인한다 — `grep -c '^### Task'`가 `0`(plan 본문이 섞이지 않았다), `grep -c '^\*\*Q[0-9]'`가 `10`(수록된 교본 템플릿의 `**Q1. <질문>**` 1개 + 9문항), 파일 끝이 Q9 답변이다.
 
-- [ ] **Step 3: 완료노트 작성 — `docs/roadmap/round00-완료노트.md`**
+- [x] **Step 3: 완료노트 작성 — `docs/roadmap/round00-완료노트.md`**
 
 `docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md`를 복사해 채운다. 고정 내용:
 - 날짜 `2026-11-09`(실제 종료일이 다르면 그 날짜), 브랜치 `feat/round00-scaffold`, spec `docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md`, plan `docs/superpowers/plans/2026-11-09-round00-scaffold.md`, 교본 `docs/guides/round00/00-개요.md`.
@@ -1343,14 +1343,14 @@ Expected: `21` — Step 1 순서 목록의 파일 20개 + `docs/guides/_TEMPLATE
 - 「다음 라운드 진입점」: `round01 — 끝-끝 경로. 착수 전 Azure 구독과 Azure OpenAI 배포 모델·리전 결정(spec §10), 개발 PC에 kind 설치.`
 - 「상태」: 실제로 끝난 항목만 체크한다(이 시점에는 `dev` 머지·`main` 머지 두 줄은 비어 있다).
 
-- [ ] **Step 4: `docs/roadmap/00_status.md` 갱신**
+- [x] **Step 4: `docs/roadmap/00_status.md` 갱신**
 
 - 최종 갱신 줄: `최종 갱신: <날짜> (round00 종료 — 저장소 골격·라운드 방식 이식)`
 - 「현재 상태」 두 번째 항목을 `round00 종료 — ...(산출물 목록 그대로). 상세: round00-완료노트.md.`로 바꾼다.
 - 「다음 할 일」에서 round00 마무리 항목을 지운다.
 - 라운드 이력 행: `| round00 | [저장소 골격 + 라운드 방식 이식](round00-완료노트.md) · [교본](../guides/round00/00-개요.md) | 완료 (main 머지·push) |`
 
-- [ ] **Step 5: 커밋과 push**
+- [x] **Step 5: 커밋과 push**
 
 ```bash
 git add docs/guides/round00/00-개요.md docs/roadmap/round00-완료노트.md docs/roadmap/00_status.md
