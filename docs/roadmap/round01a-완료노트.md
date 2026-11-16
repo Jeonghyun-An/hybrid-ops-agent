@@ -60,7 +60,7 @@ plan: `docs/superpowers/plans/2026-11-11-round01a-kind-mcp-read.md`
 
 ## 상태
 - [x] code-reviewer 정적 리뷰 통과(high·medium 수정, low는 수정하거나 「결정」에 이유) — 영역 넷 + 교본, high 없음, medium 모두 수정(오탐 1건). 교본 검토에서 나온 init 컨테이너 종료 사유 결함(medium)도 코드와 테스트로 고쳤다
-- [ ] CI green(작업 브랜치 마지막 커밋)
+- [x] CI green(작업 브랜치 마지막 커밋) — `e17cac7`, 실행 43796730523 세 잡 success(리뷰 반영 커밋 `45ffdd5`도 실행 43795316495 success)
 - [x] 수동 스모크 확인 — 호출 흐름, 장애 두 가지와 복구, 진행 기한을 넘긴 뒤 `reset`(종료 코드 0), 잘못된 장애 이름(종료 코드 2)
 - [x] 문서 갱신(교본·00_status·실제로 돌려 보며 새로 겪은 함정(개발 환경 포함)을 `docs/ops/recurring-gotchas.md`에 추가)
 - [x] 클라우드 리소스 정지 확인(GKE 노드를 켠 라운드만 — 확인 명령은 `/round-finish` 5단계. 켜지 않은 라운드는 「해당 없음」을 덧붙이고 체크) — 해당 없음
