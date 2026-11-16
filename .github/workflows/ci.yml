@@ -22,7 +22,9 @@ jobs:
         run: uv run ruff check .
       - name: ruff 포맷 검사
         run: uv run ruff format --check .
-      - name: pytest
+      - name: shellcheck(pre-commit과 같은 버전)
+        run: uv run pre-commit run shellcheck --all-files
+      - name: pytest(단위 — 통합 테스트는 아래 잡)
         run: uv run pytest
 
   secrets:
@@ -36,3 +38,49 @@ jobs:
         run: curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz gitleaks
       - name: gitleaks 검사
         run: ./gitleaks git --redact --verbose .
+
+  integration:
+    name: 통합 테스트(kind)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+      - name: kind·kubectl 설치(버전 고정 — scripts/dev-cluster.sh·devcontainer와 같이 올린다)
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -sSfLo "$RUNNER_TEMP/bin/kind" https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64
+          curl -sSfLo "$RUNNER_TEMP/bin/kubectl" https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl
+          chmod +x "$RUNNER_TEMP/bin/kind" "$RUNNER_TEMP/bin/kubectl"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          echo "HOA_MCP_KUBECONFIG=$RUNNER_TEMP/hoa-kind-mcp-read.kubeconfig" >> "$GITHUB_ENV"
+      - name: 의존성 설치(잠금 파일 그대로)
+        run: uv sync --locked
+      - name: 개발 클러스터 올리기
+        run: bash scripts/dev-cluster.sh up
+      - name: 통합 테스트
+        run: uv run pytest -m integration
+      - name: 스크립트 장애 주입·복구
+        run: |
+          bash scripts/dev-cluster.sh fault image-pull
+          bash scripts/dev-cluster.sh reset
+          bash scripts/dev-cluster.sh fault bad-config
+          bash scripts/dev-cluster.sh reset
+          status=0
+          bash scripts/dev-cluster.sh fault nope || status=$?
+          test "$status" -eq 2
+      - name: 실패 진단
+        if: failure() || cancelled()
+        run: |
+          kubectl --context kind-hoa get pods,events -A || true
+          kind export logs "$RUNNER_TEMP/kind-logs" --name hoa || true
+      - name: kind 로그 올리기
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kind-logs
+          path: ${{ runner.temp }}/kind-logs
+          retention-days: 7
+          if-no-files-found: ignore

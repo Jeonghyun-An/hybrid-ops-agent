@@ -1,0 +1,9 @@
+# demo_app/Dockerfile 전용 무시 목록 — 빌드 컨텍스트(저장소 루트)에서 이미지에 필요한 것만 보낸다.
+*
+!pyproject.toml
+!uv.lock
+!agent/pyproject.toml
+!demo_app/pyproject.toml
+!demo_app/src
+!mcp_servers/pyproject.toml
+**/__pycache__

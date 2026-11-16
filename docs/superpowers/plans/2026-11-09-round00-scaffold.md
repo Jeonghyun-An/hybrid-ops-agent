@@ -1390,10 +1390,10 @@ git push origin dev
 
 첫 `dev` 머지 뒤 사용자 승인으로 `CLAUDE.md`·`GIT_WORKFLOW.md`를 고친 경우(round00에서 실제로 있었다): 작업 브랜치를 `dev`에 맞춘(`git merge --ff-only dev`) 뒤 고치고, code-reviewer 확인과 CI green을 거쳐 사용자 승인을 받아 Step 1과 같은 방식으로 다시 `--no-ff` 머지한다. 그 뒤 `dev`에서 완료노트 「상태」의 리뷰·CI 줄을 최종 커밋 기준으로 고친다.
 
-- [ ] **Step 3: [승인 뒤] 라운드 종료**
+- [x] **Step 3: [승인 뒤] 라운드 종료**
 
 사용자가 라운드 종료를 승인하면 `/round-finish` 스킬(`.claude/skills/round-finish/SKILL.md`) 절차대로 `dev → main` 머지 + push. 이 저장소를 작업 폴더로 연 세션이 아니면 스킬이 목록에 없으므로 그 파일을 읽고 절차를 그대로 따른다.
 
-- [ ] **Step 4: 마지막 체크**
+- [x] **Step 4: 마지막 체크**
 
 `dev`에서 완료노트의 `- [ ] \`dev→main\` 머지 + push 완료`를 `- [x]`로 바꾸고 커밋해 `dev`에만 push한다(`[Docs] round00 — 완료노트 상태: main 머지·push 완료 체크`). 이 한 줄 때문에 `main`을 다시 머지하지 않는다 — 다음 라운드 머지 때 함께 올라간다.

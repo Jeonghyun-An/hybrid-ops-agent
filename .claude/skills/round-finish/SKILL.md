@@ -16,10 +16,10 @@ description: hybrid-ops-agent 라운드를 종료할 때 사용 — dev에 머�
 
 ## 절차
 1. 핵심 동작 수동 스모크를 확인했는지 본다(CI는 6단계에서 원격 기준으로 본다).
-2. 완료노트(`docs/roadmap/round<NN>-완료노트.md`)의 `## 상태` 체크리스트(정적 리뷰·CI·스모크·문서 갱신·Azure 정지·머지 승인) 확인.
+2. 완료노트(`docs/roadmap/round<NN>-완료노트.md`)의 `## 상태` 체크리스트(정적 리뷰·CI·스모크·문서 갱신·클라우드 정지·머지 승인) 확인.
 3. 라운드 중 실제로 돌려 보며 새로 겪은 함정(개발 환경 포함)이 있으면 `docs/ops/recurring-gotchas.md`에 추가됐는지 확인.
 4. `docs/roadmap/00_status.md` 갱신 확인(최종 갱신 날짜·현재 상태·다음 할 일·라운드 이력 — 라운드 이력만 바꾸고 현재 상태를 그대로 두지 않는다).
-5. AKS를 켠 라운드면 꺼져 있는지 확인: `az aks show -g <그룹> -n <클러스터> --query powerState.code -o tsv` → `Stopped`.
+5. GKE 노드를 켠 라운드면 노드가 0인지 확인한다 — 확인 명령은 GKE 운영 방식을 정하는 round03에서 여기에 적는다(그 전 라운드는 해당 없음).
 6. **머지 전 확인** — 하나라도 어긋나면 중단하고 사용자에게 보고한다:
    ```bash
    git fetch origin

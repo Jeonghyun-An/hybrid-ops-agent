@@ -1,0 +1,19 @@
+[project]
+name = "hoa-mcp"
+version = "0.1.0"
+description = "MCP 서버 — 클러스터 조회 도구(k8s-read)"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.14",
+    "kubernetes-asyncio>=36.1",
+    "mcp>=1.30,<2",
+    "pydantic>=2.14",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+hoa-mcp-k8s-read = "hoa_mcp.k8s_read.server:main"
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
