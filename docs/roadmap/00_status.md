@@ -16,4 +16,4 @@
 |---|---|---|
 | round00 | [저장소 골격 + 라운드 방식 이식](round00-완료노트.md) · [교본](../guides/round00/00-개요.md) | 완료 (main 머지·push) |
 | round01a | [kind 개발 클러스터·데모 앱·MCP k8s-read](round01a-완료노트.md) · [교본](../guides/round01a/00-개요.md) | 완료 (main 머지·push) |
-| round01b | [LangGraph 에이전트·LLM 두 종·평가 러너 v0](round01b-완료노트.md) · [교본](../guides/round01b/00-개요.md) | 리뷰·검증 중 |
+| round01b | [LangGraph 에이전트·LLM 두 종·평가 러너 v0](round01b-완료노트.md) · [교본](../guides/round01b/00-개요.md) | dev 머지, main 대기 |
