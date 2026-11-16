@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+import yaml
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import create_connected_server_and_client_session
 
@@ -19,8 +20,8 @@ pytestmark = pytest.mark.integration
 CONTEXT = "kind-hoa"
 ROOT = Path(__file__).resolve().parents[3]
 DEMO_DIR = ROOT / "deploy" / "kind" / "demo"
-FAULTS_DIR = ROOT / "deploy" / "kind" / "faults"
-FAULT_TARGETS = {"image-pull": "orders", "bad-config": "inventory"}
+# 장애 대상의 정본은 평가 시나리오다 — 멤버 경계라 hoa_eval을 import하지 않고 YAML을 직접 읽는다
+SCENARIO_DIR = ROOT / "eval" / "scenarios"
 PULL_FAILURES = {"ErrImagePull", "ImagePullBackOff"}
 WAIT_SECONDS = 120
 
@@ -82,17 +83,18 @@ def wait_for(description: str, condition: Callable[[], object]) -> None:
 
 
 @contextmanager
-def injected(fault: str) -> Iterator[None]:
-    target = FAULT_TARGETS[fault]
+def injected(scenario: str) -> Iterator[None]:
+    data = yaml.safe_load((SCENARIO_DIR / f"{scenario}.yaml").read_text(encoding="utf-8"))
+    fault = data["fault"]
     kubectl(
         "-n",
-        "demo",
+        fault["namespace"],
         "patch",
-        f"deployment/{target}",
+        f"deployment/{fault['deployment']}",
         "--type",
         "strategic",
         "--patch-file",
-        str(FAULTS_DIR / f"{fault}.yaml"),
+        str(ROOT / fault["patch"]),
     )
     try:
         yield
