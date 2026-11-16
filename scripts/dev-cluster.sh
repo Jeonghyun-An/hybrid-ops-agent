@@ -40,10 +40,16 @@ wait_rollouts() {
 }
 
 cmd_up() {
-  local existed=true
+  local existed=true clusters
   check_kind_version
-  if ! kind get clusters | grep -qx "${CLUSTER}"; then
+  # 목록을 먼저 받아 둔다 — kind get clusters | grep -q 는 pipefail 아래에서 SIGPIPE로 실패할 수 있다
+  clusters="$(kind get clusters)"
+  if grep -qx "${CLUSTER}" <<<"${clusters}"; then
+    # 클러스터는 있는데 kubeconfig에 컨텍스트가 없을 때를 대비해 다시 써 둔다
+    kind export kubeconfig --name "${CLUSTER}"
+  else
     existed=false
+    # 새로 만들면 사용자 kubeconfig의 current-context가 kind-hoa로 바뀐다(이 스크립트는 컨텍스트를 명시해서 쓴다)
     kind create cluster --name "${CLUSTER}" --image "${NODE_IMAGE}" \
       --config deploy/kind/kind-config.yaml --wait 120s
   fi
@@ -78,8 +84,12 @@ cmd_fault() {
   echo "장애 ${name}을(를) deployment/${target}에 넣었다 — 되돌리기: bash scripts/dev-cluster.sh reset"
 }
 
+# 기준 매니페스트를 다시 적용한다. client-side apply는 패치가 새로 더한 필드(매니페스트에 없는 환경변수 등)를
+# 지우지 않으므로, 장애 패치는 기준 매니페스트에 이미 있는 필드만 바꾼다.
 cmd_reset() {
   k apply -f deploy/kind/demo/
+  # 진행 기한(progressDeadlineSeconds)을 넘긴 장애도 rollout status가 실패하지 않게 새 ReplicaSet으로 다시 시작한다
+  k -n demo rollout restart deployment
   wait_rollouts
 }
 
@@ -88,10 +98,12 @@ cmd_mcp_kubeconfig() {
   server="$(k config view --minify --raw -o jsonpath='{.clusters[0].cluster.server}')"
   ca="$(k config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')"
   token="$(k -n hoa-system create token hoa-mcp-read --duration=12h)"
+  local tmp
   mkdir -p "$(dirname "${MCP_KUBECONFIG}")"
+  tmp="${MCP_KUBECONFIG}.tmp"
   (
     umask 077
-    cat >"${MCP_KUBECONFIG}" <<EOF
+    cat >"${tmp}" <<EOF
 apiVersion: v1
 kind: Config
 clusters:
@@ -112,6 +124,9 @@ contexts:
 current-context: hoa-mcp-read@${CONTEXT}
 EOF
   )
+  # 이미 있던 파일을 덮어써도 권한이 600이 되도록 새 파일에 쓰고 옮긴다
+  chmod 600 "${tmp}"
+  mv -f "${tmp}" "${MCP_KUBECONFIG}"
   echo "MCP용 읽기 전용 kubeconfig: ${MCP_KUBECONFIG} (토큰 12시간 유효)"
 }
 

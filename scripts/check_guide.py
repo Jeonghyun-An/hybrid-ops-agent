@@ -3,6 +3,7 @@
 사용: uv run python scripts/check_guide.py <교본 파일 또는 폴더> [--rev <커밋>]
 --rev를 주면 작업 사본 대신 그 커밋의 파일과 비교한다.
 지난 라운드 교본은 그 라운드의 커밋과 비교한다.
+종료 코드: 0 모두 일치, 1 불일치·누락·형식 오류, 2 잘못된 --rev.
 """
 
 import argparse
@@ -14,6 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FILE_LINE = re.compile(r"^\*\*파일\*\*: `([^`]+)`$")
+NEAR_FILE_LINE = re.compile(r"^\*\*파일")
 FENCE = re.compile(r"^(`{3,}|~{3,})")
 
 
@@ -26,8 +28,11 @@ def extract_blocks(guide: Path) -> list[tuple[str, str]]:
     blocks: list[tuple[str, str]] = []
     i = 0
     while i < len(lines):
-        match = FILE_LINE.match(lines[i].rstrip("\r\n"))
+        line = lines[i].rstrip("\r\n")
+        match = FILE_LINE.match(line)
         if match is None:
+            if NEAR_FILE_LINE.match(line):
+                raise GuideError(f"{guide}:{i + 1}: 「**파일**: `경로`」 형식이 아니다 — {line}")
             i += 1
             continue
         path = match.group(1)
@@ -46,6 +51,16 @@ def extract_blocks(guide: Path) -> list[tuple[str, str]]:
         blocks.append((path, "".join(lines[j + 1 : k])))
         i = k + 1
     return blocks
+
+
+def rev_exists(rev: str) -> bool:
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"],
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
 
 
 def read_actual(path: str, rev: str | None) -> str | None:
@@ -68,10 +83,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("target", type=Path, help="교본 파일 또는 교본 폴더")
     parser.add_argument("--rev", help="작업 사본 대신 비교할 git 커밋")
     args = parser.parse_args(argv)
+    if args.rev is not None and not rev_exists(args.rev):
+        print(f"커밋을 찾을 수 없다: {args.rev}")
+        return 2
     checked = 0
     mismatched = 0
     for guide in guide_files(args.target):
-        for path, block in extract_blocks(guide):
+        try:
+            blocks = extract_blocks(guide)
+        except GuideError as exc:
+            print(f"형식 오류: {exc}")
+            mismatched += 1
+            continue
+        for path, block in blocks:
             checked += 1
             expected = read_actual(path, args.rev)
             if expected is None:
@@ -88,6 +112,9 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 )
                 mismatched += 1
+    if checked == 0:
+        print("대조할 코드블록이 없다 — 교본 경로를 확인한다")
+        return 1
     print(f"대조 {checked}개, 불일치 {mismatched}개")
     return 1 if mismatched else 0
 

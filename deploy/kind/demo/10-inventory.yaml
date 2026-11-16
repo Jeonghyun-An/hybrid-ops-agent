@@ -16,6 +16,7 @@ spec:
       labels:
         app: inventory
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: inventory
           image: hoa-demo:0.1.0
@@ -51,6 +52,10 @@ spec:
             runAsGroup: 65532
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
 ---
 apiVersion: v1
 kind: Service

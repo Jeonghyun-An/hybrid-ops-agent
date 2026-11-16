@@ -29,11 +29,12 @@ target-version = "py312"
 src = ["agent/src", "demo_app/src", "mcp_servers/src"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "ANN"]
 
 [tool.pytest.ini_options]
-addopts = '--import-mode=importlib -m "not integration"'
-testpaths = ["agent/tests", "demo_app/tests", "mcp_servers/tests"]
+addopts = '--import-mode=importlib --strict-markers -m "not integration"'
+testpaths = ["agent/tests", "demo_app/tests", "mcp_servers/tests", "scripts/tests"]
+filterwarnings = ["error"]
 markers = [
     "integration: kind 클러스터가 필요한 통합 테스트 — uv run pytest -m integration 으로 따로 돈다",
 ]

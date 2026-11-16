@@ -62,8 +62,25 @@ jobs:
         run: bash scripts/dev-cluster.sh up
       - name: 통합 테스트
         run: uv run pytest -m integration
+      - name: 스크립트 장애 주입·복구
+        run: |
+          bash scripts/dev-cluster.sh fault image-pull
+          bash scripts/dev-cluster.sh reset
+          bash scripts/dev-cluster.sh fault bad-config
+          bash scripts/dev-cluster.sh reset
+          status=0
+          bash scripts/dev-cluster.sh fault nope || status=$?
+          test "$status" -eq 2
       - name: 실패 진단
-        if: failure()
+        if: failure() || cancelled()
         run: |
           kubectl --context kind-hoa get pods,events -A || true
           kind export logs "$RUNNER_TEMP/kind-logs" --name hoa || true
+      - name: kind 로그 올리기
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kind-logs
+          path: ${{ runner.temp }}/kind-logs
+          retention-days: 7
+          if-no-files-found: ignore
