@@ -1,6 +1,6 @@
 # hybrid-ops-agent
 
-온프레미스(집 GPU PC의 k3s)와 Azure(AKS·Azure OpenAI)를 함께 쓰는 **쿠버네티스 운영 에이전트**. 클러스터 장애를 MCP 도구로 조사하고, GraphRAG로 비슷한 과거 장애와 런북을 찾아 원인을 진단하고, 사람 승인을 받아 조치한다.
+온프레미스(회사 GPU 서버의 k3s)와 GCP(GKE·Gemini)를 함께 쓰는 **쿠버네티스 운영 에이전트**. 클러스터 장애를 MCP 도구로 조사하고, GraphRAG로 비슷한 과거 장애와 런북을 찾아 원인을 진단하고, 사람 승인을 받아 조치한다. 같은 코드를 GPU 티어(회사 GPU 서버)와 로컬 티어(개발 PC의 kind, GPU 없음)로 돌린다.
 
 > 학습 목적의 개인 프로젝트다. 라운드 단위로 쌓아 가며 라운드마다 설계(spec)·계획(plan)·완료노트·교본을 남긴다.
 
@@ -11,16 +11,17 @@
 | LangGraph 멀티에이전트 | supervisor + 서브에이전트, 체크포인트(중단·재개), interrupt로 사람 승인 |
 | MCP 서버·클라이언트 | 클러스터 조회·조치·관측 도구를 MCP 서버로 직접 만들고 에이전트가 MCP로 호출 |
 | GraphRAG | Neo4j에 클러스터 구조 + 장애 지식 그래프, 벡터 RAG와 진단 정확도 비교 |
-| 쿠버네티스 + IaC | 온프레미스 k3s + Azure AKS, Terraform, Helm, Argo CD, GitHub Actions |
+| 쿠버네티스 + IaC | 온프레미스 k3s + GCP GKE, Terraform, Helm, Argo CD, GitHub Actions |
 | 관측·자동 평가 | Prometheus·Loki·Tempo, OpenTelemetry → Langfuse, 장애 시나리오 자동 채점 |
 
 ## 어디서 무엇이 도나
 
 | 위치 | 켜짐 | 역할 |
 |---|---|---|
-| 집 RTX 3060 PC (Ubuntu + k3s) | 상시 | 로컬 LLM, Neo4j, Postgres, 관측 스택, Argo CD, 데모 앱·에이전트·MCP 서버 |
-| Azure AKS | 작업할 때만 | 상태 없는 앱(에이전트 API·MCP 서버·웹 UI), 데모 앱 사본 |
-| Azure OpenAI | 사용량 과금 | 계획·진단·그래프 추출 |
+| 회사 GPU 서버 (k3s) — GPU 티어 | 상시 | 로컬 LLM(vLLM의 Gemma), Neo4j, Postgres, 관측 스택, Argo CD, 데모 앱·에이전트·MCP 서버 |
+| 개발 PC (kind) — 로컬 티어 | 개발할 때 | 데모 앱·MCP 서버·에이전트(Gemini 무료 등급), 통합 테스트 — GPU 없이 돈다 |
+| GCP GKE | 작업할 때만 | 상태 없는 앱(에이전트 API·MCP 서버·웹 UI), 데모 앱 사본 |
+| Gemini | 무료 등급(round01~02) | 계획·진단·그래프 추출 |
 | Langfuse Cloud | 상시(SaaS) | 에이전트 트레이스·평가 데이터셋 |
 
 자세한 설계와 라운드 로드맵: [전체 설계 spec](docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md) · 진행 상황: [docs/roadmap/00_status.md](docs/roadmap/00_status.md)
@@ -36,7 +37,16 @@ uv run pytest
 uv run hoa --version
 ```
 
-devcontainer(`.devcontainer/`)를 쓰면 uv·kubectl·helm·terraform·az가 갖춰진 컨테이너에서 `uv run pytest`·`uv run hoa --version`을 그대로 쓴다(`uv sync`는 컨테이너를 만들 때 끝난다). `pre-commit install`과 커밋은 호스트에서 한다 — [GIT_WORKFLOW.md](GIT_WORKFLOW.md) §개발 환경.
+로컬 티어 개발 클러스터에는 Docker Desktop과 [kind](https://kind.sigs.k8s.io/) v0.33.0이 필요하다(Windows는 Git Bash에서 실행한다).
+
+```bash
+bash scripts/dev-cluster.sh up
+uv run pytest -m integration
+```
+
+`up`은 kind 클러스터 `hoa`에 데모 앱(gateway·orders·inventory)을 띄우고 MCP 서버용 읽기 전용 kubeconfig를 만든다. `fault image-pull`·`fault bad-config`로 장애를 심고 `reset`으로 되돌린다. 클러스터를 지울 때는 `down`.
+
+devcontainer(`.devcontainer/`)를 쓰면 uv·kubectl·helm·terraform이 갖춰진 컨테이너에서 `uv run pytest`·`uv run hoa --version`을 그대로 쓴다(`uv sync`는 컨테이너를 만들 때 끝난다). `pre-commit install`과 커밋, kind 클러스터는 호스트에서 쓴다 — [GIT_WORKFLOW.md](GIT_WORKFLOW.md) §개발 환경.
 
 ## 문서
 

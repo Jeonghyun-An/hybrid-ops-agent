@@ -8,7 +8,7 @@
 
 - **날짜**: 2026-11-09 (round00)
 - **증상**: Windows 개발 PC에서 `git commit` 때 `warning: in the working copy of '<파일>', LF will be replaced by CRLF the next time Git touches it`가 뜬다.
-- **원인**: 전역 설정 `core.autocrlf=true`가 작업 사본을 CRLF로 바꾸려 한다. 같은 파일을 Linux(집 PC·CI·컨테이너)에서 쓰면 줄바꿈이 섞이고, 셸 스크립트는 줄 끝의 `\r` 때문에 `bad interpreter`로 죽는다.
+- **원인**: 전역 설정 `core.autocrlf=true`가 작업 사본을 CRLF로 바꾸려 한다. 같은 파일을 Linux(GPU 서버·CI·컨테이너)에서 쓰면 줄바꿈이 섞이고, 셸 스크립트는 줄 끝의 `\r` 때문에 `bad interpreter`로 죽는다.
 - **해결**: 저장소 `.gitattributes`에 `* text=auto eol=lf`를 둔다. `eol` 속성은 개인 설정 `core.autocrlf`보다 우선하므로 작업 사본도 LF로 고정된다(PowerShell 스크립트만 CRLF). 이미 들어간 파일은 `git add --renormalize .`로 다시 정규화한다.
 - **재발 방지**: 확인은 `git ls-files --eol`에서 텍스트 파일이 모두 `i/lf w/lf`인지 본다(`.ps1`은 `w/crlf`, 이미지는 `-text`). Windows 전용 파일 종류가 새로 생기면 `.gitattributes`에 규칙을 더한다.
 
@@ -26,4 +26,20 @@
 - **증상**: devcontainer 안에서 `git status`가 `fatal: detected dubious ownership in repository at '/workspaces/hybrid-ops-agent'`로 멈춘다. `safe.directory`로 넘겨도 `git commit`이 `cannot exec '.git/hooks/pre-commit': No such file or directory`로 실패한다(훅을 직접 실행하면 `not found`, 종료 코드 127).
 - **원인**: (1) Windows 호스트의 작업 폴더는 bind mount 안에서 컨테이너 사용자(`vscode`)와 소유자가 달라, git의 소유자 검사가 저장소를 거부한다. (2) `.git/hooks`는 추적되지 않는 파일이라 `.gitattributes`가 적용되지 않는데, 호스트(Windows)의 pre-commit이 훅 스크립트를 CRLF로 쓴다. 첫 줄 `#!/bin/sh\r`의 `\r` 때문에 Linux가 인터프리터를 찾지 못한다(Git Bash는 이를 견딘다).
 - **해결**: `postCreateCommand` 맨 앞에서 `sudo git config --system --replace-all safe.directory ${containerWorkspaceFolder}`로 작업 폴더를 등록한다(시스템 설정이라 VS Code가 복사해 넣는 `~/.gitconfig`에 덮이지 않는다). 커밋은 호스트에서 한다 — 컨테이너에서 `pre-commit install`로 훅을 다시 쓰면 이번엔 호스트 커밋이 깨진다(훅이 컨테이너 Python 경로를 가리킨다).
-- **재발 방지**: 컨테이너는 도구(uv·kubectl·helm·terraform·az)와 테스트·`pre-commit run`용으로 쓰고, `git commit`은 호스트에서 한다(`GIT_WORKFLOW.md` §개발 환경). 컨테이너의 venv는 `UV_PROJECT_ENVIRONMENT`로 작업 폴더 밖에 둬서 호스트 `.venv`를 건드리지 않는다.
+- **재발 방지**: 컨테이너는 도구(uv·kubectl·helm·terraform)와 테스트·`pre-commit run`용으로 쓰고, `git commit`은 호스트에서 한다(`GIT_WORKFLOW.md` §개발 환경). 컨테이너의 venv는 `UV_PROJECT_ENVIRONMENT`로 작업 폴더 밖에 둬서 호스트 `.venv`를 건드리지 않는다.
+
+## 4. Starlette `TestClient`가 httpx 사용 경고를 낸다
+
+- **날짜**: 2026-11-11 (round01a)
+- **증상**: `uv run pytest -W error`에서 `from fastapi.testclient import TestClient`가 수집 단계에서 `StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated; install httpx2 instead.`로 실패한다. 경고를 오류로 바꾸지 않으면 테스트는 통과하고 경고만 남는다.
+- **원인**: Starlette 1.x가 `TestClient`의 httpx 백엔드를 deprecated로 바꿨다. FastAPI 0.162의 `fastapi.testclient`는 Starlette 것을 그대로 내보낸다.
+- **해결**: 앱을 `httpx.AsyncClient(transport=httpx.ASGITransport(app=app))`로 부르는 비동기 테스트(`@pytest.mark.anyio`)로 쓴다. 하류 서비스도 `ASGITransport`로 실제 앱을 잇는다.
+- **재발 방지**: 코딩 표준 「테스트」 절. 경고가 새로 생기면 `uv run pytest -W error`로 원인부터 본다.
+
+## 5. `mcp`를 상한 없이 설치하면 FastMCP import가 깨진다
+
+- **날짜**: 2026-11-11 (round01a)
+- **증상**: 상한 없는 `mcp` 의존성이 2.x를 받아 `from mcp.server.fastmcp import FastMCP`가 `ModuleNotFoundError: No module named 'mcp.server.fastmcp'. This is mcp 2.x, where FastMCP was renamed to MCPServer ...`로 실패한다. 반대로 서버를 2.x API로 쓰면 `langchain-mcp-adapters`(0.3.2, `mcp<2`)를 더할 때 잠금이 1.x로 내려가 서버가 깨진다.
+- **원인**: MCP Python SDK 2.0에서 FastMCP가 `mcp.server.mcpserver.MCPServer`로 바뀌었다. uv 워크스페이스는 잠금 파일 하나라 멤버마다 다른 메이저를 쓸 수 없다.
+- **해결**: `mcp_servers/pyproject.toml`에서 `mcp>=1.30,<2`로 고정한다.
+- **재발 방지**: `langchain-mcp-adapters`가 2.x를 지원하면 서버(FastMCP → MCPServer)와 에이전트를 같은 라운드에 함께 올린다.
