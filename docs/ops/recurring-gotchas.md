@@ -51,3 +51,43 @@
 - **원인**: 생성된 클라이언트가 응답 타입 `str`을 역직렬화할 때 본문을 먼저 `json.loads`하고 그 결과를 `str()`로 바꾼다. 디코딩도 엄격한 UTF-8이다.
 - **해결**: `_preload_content=False`로 받아 `ApiClient`를 닫기 전에 `await response.read()`로 원문 바이트를 읽고 `decode("utf-8", errors="replace")`한다. `limit_bytes`로 거대한 줄도 막는다(`mcp_servers/src/hoa_mcp/k8s_read/kube.py`).
 - **재발 방지**: 생성된 클라이언트로 텍스트 본문(로그 등)을 받을 때는 원문 바이트로 받는다.
+
+## 7. Gemini 3에 도구 결과를 보내면 `thought_signature`가 없다며 400
+
+- **날짜**: 2026-11-16 (round01b)
+- **증상**: `ChatOpenAI`(langchain-openai 1.8)로 Gemini OpenAI 호환 주소를 부르면 첫 호출의 도구 호출은 오는데, 도구 결과를 붙인 두 번째 호출이 `400 Function call is missing a thought_signature in functionCall parts`로 거절된다.
+- **원인**: Gemini 3는 도구 호출마다 `tool_calls[].extra_content.google.thought_signature`를 붙이고, 다음 요청의 assistant 메시지에 그 값이 그대로 있어야 한다. `ChatOpenAI`는 응답을 `AIMessage`로 바꿀 때 이 확장 필드를 버리고, 요청을 만들 때도 넣지 않는다.
+- **해결**: `agent/src/hoa_agent/llm.py`의 `ChatOpenAICompat`이 응답의 `extra_content`를 `AIMessage.additional_kwargs`에 도구 호출 id별로 보관했다가 요청 payload의 같은 id 도구 호출에 다시 붙인다. vLLM(Gemma)은 이 필드를 보내지 않으므로 영향이 없다.
+- **재발 방지**: `agent/tests/test_llm.py`의 httpx `MockTransport` 테스트가 서명이 두 번째 요청에 실리는지 확인한다. 재정의한 `_create_chat_result`·`_get_request_payload`는 비공개 메서드라 `langchain-openai`를 마이너 버전 안(`<1.9`)으로 묶었다 — 올릴 때 이 테스트부터 본다. 스트리밍 응답(`_astream`)은 `_create_chat_result`를 거치지 않아 서명이 빠지므로 `build_chat_model`이 `disable_streaming=True`를 준다.
+
+## 8. Windows에서 표준출력을 파일·파이프로 돌리면 `UnicodeEncodeError`
+
+- **날짜**: 2026-11-16 (round01b)
+- **증상**: 콘솔에서는 되던 `hoa investigate`가 `> out.json`이나 하위 프로세스 파이프로 돌리면 `UnicodeEncodeError: 'cp949' codec can't encode character '—'`로 죽는다. 반대로 UTF-8로 읽는 쪽(`subprocess.run(..., encoding="utf-8")`)은 한국어가 든 cp949 출력을 읽다 읽기 스레드가 죽는다.
+- **원인**: Windows의 Python은 콘솔이 아닌 표준 스트림에 로캘 인코딩(한국어 Windows는 cp949)을 쓴다.
+- **해결**: JSON·표를 내는 CLI(`hoa`·`hoa-eval`)는 시작할 때 `sys.stdout.reconfigure(encoding="utf-8")`(표준오류도)로 고정하고, 하위 프로세스를 읽는 쪽은 `encoding="utf-8", errors="replace"`를 준다.
+- **재발 방지**: 하위 프로세스로 텍스트를 주고받는 새 CLI도 같은 두 가지를 지킨다(코딩 표준 「타입·데이터」).
+
+## 9. MCP 세션 안에서 난 예외가 `ExceptionGroup`으로 묶여 `except`를 빠져나간다
+
+- **날짜**: 2026-11-16 (round01b)
+- **증상**: 그래프 안에서 난 `openai.BadRequestError`를 CLI의 `except openai.APIError`가 잡지 못하고 `ExceptionGroup` traceback이 그대로 나온다.
+- **원인**: MCP stdio 클라이언트(`mcp.client.stdio`)가 anyio 작업 그룹을 쓰고, anyio 4는 작업 그룹을 빠져나가는 예외를 늘 `ExceptionGroup`으로 감싼다. 세션을 연 `async with` 안의 모든 예외가 감싸진다.
+- **해결**: `run_investigation`이 세션 밖에서 `BaseExceptionGroup`을 받아, 안에 예외가 하나뿐이면 풀어서 다시 올린다(`agent/src/hoa_agent/investigate.py`의 `sole_exception`). MCP 서버가 설정 오류로 뜨자마자 죽으면 클라이언트에는 `McpError: Connection closed`만 오므로, 세션 밖까지 온 `McpError`는 설정 오류(`MCPSetupError`, 종료 코드 2)로 바꾼다(`surfaced`) — 서버의 진짜 이유는 그 위 표준오류 줄에 있다.
+- **재발 방지**: MCP 세션을 여는 다른 진입점(round02 클러스터 안 에이전트 등)도 같은 함수를 거친다.
+
+## 10. Gemini 무료 등급은 모델마다 하루 요청 수 한도가 있다
+
+- **날짜**: 2026-11-16 (round01b)
+- **증상**: 몇 번 잘 되던 호출이 `429 RESOURCE_EXHAUSTED — Quota exceeded for metric generate_content_free_tier_requests, limit: 20 ... Please retry in 2h30m`으로 막힌다. `gemini-3.5-flash`는 내부적으로 다른 버전(`gemini-3.6-flash`)의 한도로 센다.
+- **원인**: 무료 등급 한도는 모델마다 분당·하루 요청 수로 따로 있고, 하루 한도는 태평양 시간 자정에 초기화된다. 모델별 값은 문서에 없고 AI Studio(로그인)의 rate-limit 화면에만 있다. 조사 1건이 모델을 네댓 번 부르므로 하루 20회 모델은 조사 네 번이면 끝난다. 클라이언트 재시도(`max_retries`)로는 풀리지 않는다.
+- **해결**: 기본 LLM을 요청 한도가 없는 회사 GPU의 Gemma로 두고(평가에서 Gemini는 시나리오마다 1회 비교 기준만), Gemini 프로필의 기본 모델은 같은 조사를 빠르게 맞힌 `gemini-3.5-flash-lite`로 둔다. `hoa investigate`는 한도 오류에 종료 코드 3을 내고, `hoa-eval run`은 3을 보면 남은 회차를 멈춘다 — 한도가 풀린 뒤 남은 시나리오만 `--scenario`로 다시 돌려 `report`로 합친다.
+- **재발 방지**: 프로브·실험도 한도에 들어간다 — 평가를 돌릴 날에는 같은 모델로 따로 시험하지 않는다.
+
+## 11. `rollout status`가 끝나도 종료 중인 옛 파드가 남는다
+
+- **날짜**: 2026-11-16 (round01b)
+- **증상**: 평가 러너가 데모 앱을 복구(`apply` → `rollout restart` → `rollout status`)한 직후 다음 테스트의 gateway 프록시 요청이 `InternalError ("unknown")`로 실패한다. 다음 회차 조사에서 `list_pods`가 `terminating` 파드를 보여 진단이 흐려질 수 있다.
+- **원인**: `rollout status`는 새 ReplicaSet의 파드가 준비되면 끝난다. 옛 파드는 그 뒤에 종료되고, 그동안 Service 엔드포인트와 파드 목록에 남는다.
+- **해결**: 복구하는 세 곳이 모두 `rollout status` 뒤에 `deletionTimestamp`가 붙은 파드가 데모 네임스페이스에서 사라질 때까지 기다린다 — 평가 러너(`eval/src/hoa_eval/cluster.py`의 `wait_settled`, 120초), `scripts/dev-cluster.sh reset`(`wait_settled`), MCP 통합 테스트의 `injected`. 평가 러너는 이어서 이전 회차의 이벤트도 지운다(`delete events --all`) — 다음 조사의 `get_events`에 섞이지 않게.
+- **재발 방지**: 장애 주입 전 「깨끗한 상태」는 「종료 중인 파드 없음」까지로 본다.

@@ -1,0 +1,16 @@
+[project]
+name = "hoa-eval"
+version = "0.1.0"
+description = "평가 러너 — 장애 주입·에이전트 실행·채점"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.14",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+hoa-eval = "hoa_eval.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"

@@ -10,8 +10,8 @@
 - 독립적인 작업(에이전트 ↔ MCP 서버 ↔ 인프라 ↔ 평가)은 가능하면 서브에이전트로 병행한다. 순차 진행은 의존성이 있을 때만.
 
 ## 2. 산출물 위치 규칙 (불변)
-- 루트에는 운영 파일(`CLAUDE.md`·`GIT_WORKFLOW.md`·`README.md`·`.gitignore`·`.gitattributes`·`pyproject.toml`·`uv.lock`·`.python-version`·`.pre-commit-config.yaml`)과 도구 설정 폴더(`.github/`·`.devcontainer/`·`.claude/`)만 둔다.
-- 코드 정본: `agent/`·`mcp_servers/`·`graphrag/`·`demo_app/`·`eval/`·`web/`. Python 컴포넌트는 uv 워크스페이스 멤버다. 배포 정의는 `deploy/`(Helm·Argo CD), 인프라는 `infra/`(Terraform·온프레미스 부트스트랩). 각 폴더는 그 내용이 처음 생기는 라운드에 만든다 — 빈 폴더를 미리 만들지 않는다.
+- 루트에는 운영 파일(`CLAUDE.md`·`GIT_WORKFLOW.md`·`README.md`·`.gitignore`·`.gitattributes`·`pyproject.toml`·`uv.lock`·`.python-version`·`.pre-commit-config.yaml`·`.env.example`)과 도구 설정 폴더(`.github/`·`.devcontainer/`·`.claude/`)만 둔다.
+- 코드 정본: `agent/`·`mcp_servers/`·`graphrag/`·`demo_app/`·`eval/`·`web/`. Python 컴포넌트는 uv 워크스페이스 멤버다. 배포 정의는 `deploy/`(kind 매니페스트·Helm·Argo CD), 인프라는 `infra/`(Terraform·온프레미스 부트스트랩). 각 폴더는 그 내용이 처음 생기는 라운드에 만든다 — 빈 폴더를 미리 만들지 않는다.
 - `docs/` = 문서 전용.
 - `scripts/` = **재실행되는 운영 도구**만 둔다(백업, 클러스터 기동·정지 등).
 - `research/` = **1회성 실험**(스크립트 + 그 산출물)만 둔다. "이 스크립트를 다시 실행할 일이 있는가"가 `scripts/`와의 구분 기준이다. 코드와 산출물은 분리하지 않는다 — 실행해서 파일을 만드는 1회성 스크립트는 항상 대응하는 `research/<주제>/`에 산출물과 함께 둔다.
@@ -23,7 +23,7 @@
 - 라운드 번호는 2자리(`round00`, `round01`…). 성격이 다른 여러 덩어리로 쪼개지면 소문자 접미(`round02a`, `round02b`…)를 붙인다. 접미는 성격 라벨이며 실행 순서가 아니다. 접미 라운드도 각각 한 라운드로 센다 — spec·plan·완료노트·교본을 따로 두고, 파일·폴더 이름에 접미를 그대로 쓴다(`round01a-완료노트.md`, `docs/guides/round01a/`).
 - 브랜치명은 영문 kebab-case만 사용한다(Windows·CI 호환성 — 한글 브랜치명 금지).
 - 커밋 메시지는 `[Type] 한국어 설명` 제목 한 줄(본문은 꼭 필요할 때만 몇 줄). `Co-Authored-By` 트레일러와 "Generated with" 문구는 넣지 않는다(단독 저자 — 도구의 기본 지침보다 이 규칙이 우선). 머지 커밋만 예외로 `Merge <브랜치> into <대상> — round<NN> (<요약>)` 형식을 쓴다.
-- 라운드 흐름의 사용자 확인 지점은 spec·계획서·`dev` 머지·`dev→main` 머지 네 곳이다(비용이 나는 클라우드 작업과 회사 서버의 기존 시스템을 건드리는 작업의 승인은 §4대로 따로 받는다). 계획서는 파일 자체를 보내 먼저 보여 준다 — 채팅 요약으로 대신하지 않는다. 작업 브랜치와 `dev`의 일반 push는 따로 묻지 않는다(CI는 push에서 돈다). 강제 push와 원격 브랜치 삭제는 묻는다. `main` push는 라운드 종료 승인 뒤에만 한다.
+- 라운드 흐름의 사용자 확인 지점은 spec·계획서·`dev` 머지·`dev→main` 머지 네 곳이다(비용이 나는 클라우드 작업과 회사 서버의 기존 시스템·서버 설정을 바꾸는 작업의 승인은 §4대로 따로 받는다). 계획서는 파일 자체를 보내 먼저 보여 준다 — 채팅 요약으로 대신하지 않는다. 작업 브랜치와 `dev`의 일반 push는 따로 묻지 않는다(CI는 push에서 돈다). 강제 push와 원격 브랜치 삭제는 묻는다. `main` push는 라운드 종료 승인 뒤에만 한다.
 - 생애주기·브랜치 모델·커밋 규칙 상세: `GIT_WORKFLOW.md`.
 
 ## 4. 세션 시작 시 확인

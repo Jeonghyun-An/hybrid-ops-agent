@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+import yaml
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import create_connected_server_and_client_session
 
@@ -19,8 +20,8 @@ pytestmark = pytest.mark.integration
 CONTEXT = "kind-hoa"
 ROOT = Path(__file__).resolve().parents[3]
 DEMO_DIR = ROOT / "deploy" / "kind" / "demo"
-FAULTS_DIR = ROOT / "deploy" / "kind" / "faults"
-FAULT_TARGETS = {"image-pull": "orders", "bad-config": "inventory"}
+# 장애 대상의 정본은 평가 시나리오다 — 멤버 경계라 hoa_eval을 import하지 않고 YAML을 직접 읽는다
+SCENARIO_DIR = ROOT / "eval" / "scenarios"
 PULL_FAILURES = {"ErrImagePull", "ImagePullBackOff"}
 WAIT_SECONDS = 120
 
@@ -30,6 +31,8 @@ def kubectl(*args: str) -> str:
         ["kubectl", "--context", CONTEXT, *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=240,
         check=False,
     )
@@ -81,21 +84,27 @@ def wait_for(description: str, condition: Callable[[], object]) -> None:
     pytest.fail(f"{WAIT_SECONDS}초 안에 {description} 상태가 되지 않았다")
 
 
+def terminating_pods() -> list[str]:
+    pods = json.loads(kubectl("-n", "demo", "get", "pods", "-o", "json"))
+    return [p["metadata"]["name"] for p in pods["items"] if p["metadata"].get("deletionTimestamp")]
+
+
 @contextmanager
-def injected(fault: str) -> Iterator[None]:
-    target = FAULT_TARGETS[fault]
+def injected(scenario: str) -> Iterator[dict[str, str]]:
+    data = yaml.safe_load((SCENARIO_DIR / f"{scenario}.yaml").read_text(encoding="utf-8"))
+    fault = data["fault"]
     kubectl(
         "-n",
-        "demo",
+        fault["namespace"],
         "patch",
-        f"deployment/{target}",
+        f"deployment/{fault['deployment']}",
         "--type",
         "strategic",
         "--patch-file",
-        str(FAULTS_DIR / f"{fault}.yaml"),
+        str(ROOT / fault["patch"]),
     )
     try:
-        yield
+        yield fault
     finally:
         kubectl("apply", "-f", str(DEMO_DIR))
         # 진행 기한(progressDeadlineSeconds)을 넘긴 장애도 되돌리도록
@@ -103,6 +112,8 @@ def injected(fault: str) -> Iterator[None]:
         kubectl("-n", "demo", "rollout", "restart", "deployment")
         for name in ("inventory", "orders", "gateway"):
             kubectl("-n", "demo", "rollout", "status", f"deployment/{name}", "--timeout=180s")
+        # 종료 중인 옛 파드가 다음 테스트에 섞이지 않게 기다린다(반복 함정 11번)
+        wait_for("종료 중인 파드 정리", lambda: not terminating_pods())
 
 
 @pytest.fixture
@@ -139,17 +150,18 @@ async def test_three_demo_services_are_running_and_available(server: FastMCP) ->
 
 @pytest.mark.anyio
 async def test_image_pull_fault_shows_in_pods_events_and_replica_sets(server: FastMCP) -> None:
-    with injected("image-pull"):
-        wait_for("orders 이미지 내려받기 실패", lambda: waiting_reasons("orders") & PULL_FAILURES)
-        pods = await call(server, "list_pods", {"namespace": "demo"})
+    with injected("image-pull") as fault:
+        app, namespace = fault["deployment"], fault["namespace"]
+        wait_for(f"{app} 이미지 내려받기 실패", lambda: waiting_reasons(app) & PULL_FAILURES)
+        pods = await call(server, "list_pods", {"namespace": namespace})
         broken = [p for p in pods["pods"] if p["waiting_reason"] in PULL_FAILURES]
-        assert broken[0]["name"].startswith("orders-")
+        assert broken[0]["name"].startswith(f"{app}-")
         events = await call(
-            server, "get_events", {"namespace": "demo", "object_name": broken[0]["name"]}
+            server, "get_events", {"namespace": namespace, "object_name": broken[0]["name"]}
         )
         assert any("hoa-demo:0.1.0-missing" in e["message"] for e in events["events"])
         deployment = await call(
-            server, "describe_deployment", {"namespace": "demo", "name": "orders"}
+            server, "describe_deployment", {"namespace": namespace, "name": app}
         )
         assert deployment["replica_sets"][0]["images"] == ["hoa-demo:0.1.0-missing"]
         assert deployment["available_replicas"] == 1
@@ -157,19 +169,20 @@ async def test_image_pull_fault_shows_in_pods_events_and_replica_sets(server: Fa
 
 @pytest.mark.anyio
 async def test_bad_config_fault_shows_in_previous_logs_and_env(server: FastMCP) -> None:
-    with injected("bad-config"):
-        wait_for("inventory 재시작", lambda: max_restarts("inventory") >= 1)
-        pods = await call(server, "list_pods", {"namespace": "demo"})
-        inventory_pods = [p for p in pods["pods"] if p["name"].startswith("inventory-")]
-        crashing = max(inventory_pods, key=lambda p: p["restarts"])
+    with injected("bad-config") as fault:
+        app, namespace = fault["deployment"], fault["namespace"]
+        wait_for(f"{app} 재시작", lambda: max_restarts(app) >= 1)
+        pods = await call(server, "list_pods", {"namespace": namespace})
+        app_pods = [p for p in pods["pods"] if p["name"].startswith(f"{app}-")]
+        crashing = max(app_pods, key=lambda p: p["restarts"])
         logs = await call(
             server,
             "get_pod_logs",
-            {"namespace": "demo", "pod": crashing["name"], "previous": True},
+            {"namespace": namespace, "pod": crashing["name"], "previous": True},
         )
         assert any("HOA_DEMO_PORT='eighty'" in line for line in logs["lines"])
         deployment = await call(
-            server, "describe_deployment", {"namespace": "demo", "name": "inventory"}
+            server, "describe_deployment", {"namespace": namespace, "name": app}
         )
         env = {var["name"]: var["value"] for var in deployment["containers"][0]["env"]}
         assert env["HOA_DEMO_PORT"] == "eighty"

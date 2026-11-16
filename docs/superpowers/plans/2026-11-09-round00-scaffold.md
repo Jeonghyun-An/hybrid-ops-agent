@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 빈 저장소에 uv 워크스페이스(`agent` 멤버 + `hoa` CLI)·pre-commit(ruff·gitleaks)·GitHub Actions CI·devcontainer를 세우고, NL-Lib의 라운드 개발 방식(CLAUDE.md·GIT_WORKFLOW.md·완료노트/교본 템플릿·code-reviewer 에이전트·round-finish 스킬)을 이 프로젝트에 맞게 옮긴다.
+**Goal:** 빈 저장소에 uv 워크스페이스(`agent` 멤버 + `hoa` CLI)·pre-commit(ruff·gitleaks)·GitHub Actions CI·devcontainer를 세우고, 이전 프로젝트의 라운드 개발 방식(CLAUDE.md·GIT_WORKFLOW.md·완료노트/교본 템플릿·code-reviewer 에이전트·round-finish 스킬)을 이 프로젝트에 맞게 옮긴다.
 
 **Architecture:** 설정·문서 Task는 고전적 red-green TDD 대상이 아니므로 "파일 없음 확인 → 전문 작성 → 구조 검증 → 커밋"으로 간다. 코드는 `hoa` CLI 하나뿐이고 이것만 TDD로 간다. 품질 게이트는 대상 파일이 있는 것(ruff·pytest·gitleaks)만 이번 라운드에 넣고, helm·terraform 게이트는 그 파일이 생기는 라운드로 미룬다(spec §8).
 
@@ -11,7 +11,7 @@
 **spec:** `docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md` (§7 round00 행, §8 라운드 방식 이식)
 
 **선행 완료 사항 (재실행 불필요):**
-- 저장소 `C:\Users\LANDSOFT\mygit\hybrid-ops-agent` 클론, 커밋 신원 `Hyonii <131145818+Jeonghyun-An@users.noreply.github.com>`.
+- 저장소 `<작업 폴더>/hybrid-ops-agent` 클론, 커밋 신원 `Hyonii <131145818+Jeonghyun-An@users.noreply.github.com>`.
 - `main`(빈 시작 커밋 `5fd3223`) → `dev` → `feat/round00-scaffold`(spec 커밋 `5f873fd`). 원격은 아직 비어 있다(push 전).
 
 모든 Task는 `feat/round00-scaffold` 브랜치에서 진행한다. 명령은 Git Bash 기준이며 작업 디렉터리는 저장소 루트다.
@@ -575,7 +575,7 @@ Expected: 섹션 수 `6`. 나열된 `.md` 경로 중 `docs/roadmap/round<NN>-완
 
 ```bash
 git add CLAUDE.md
-git commit -m "[Docs] round00 — CLAUDE.md: NL-Lib 진입점 구조를 옮기고 코드 폴더·Azure 비용 승인 규칙을 이 프로젝트에 맞춘다"
+git commit -m "[Docs] round00 — CLAUDE.md: 이전 프로젝트의 진입점 구조를 옮기고 코드 폴더·Azure 비용 승인 규칙을 이 프로젝트에 맞춘다"
 ```
 
 ---
@@ -700,7 +700,7 @@ Expected: `브랜치 모델`·`흐름`·`머지 승인 규칙`·`커밋 메시�
 
 ```bash
 git add GIT_WORKFLOW.md
-git commit -m "[Docs] round00 — GIT_WORKFLOW.md: 브랜치·승인·커밋 규칙은 NL-Lib 그대로, 품질 게이트(라운드별 도입)·개발 환경(kind/k3s/AKS)은 새로 쓴다"
+git commit -m "[Docs] round00 — GIT_WORKFLOW.md: 브랜치·승인·커밋 규칙은 이전 프로젝트 그대로, 품질 게이트(라운드별 도입)·개발 환경(kind/k3s/AKS)은 새로 쓴다"
 ```
 
 ---
@@ -858,7 +858,7 @@ git commit -m "[Docs] round00 — 반복 함정 문서를 열고 1번(Windows au
 - Create: `docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md`
 - Create: `docs/guides/_TEMPLATE.md`
 
-NL-Lib 템플릿에서 「디자인 참조」(이 프로젝트엔 디자인 트랙이 없다)를 빼고, 「수치」와 「Azure 비용」을 더한다.
+이전 프로젝트의 템플릿에서 「디자인 참조」(이 프로젝트엔 디자인 트랙이 없다)를 빼고, 「수치」와 「Azure 비용」을 더한다.
 
 - [x] **Step 1: 파일 없음 확인**
 
@@ -954,7 +954,7 @@ Expected: 완료노트 7개(`한 일`·`결정`·`수치`·`Azure 비용`·`이�
 
 ```bash
 git add docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md docs/guides/_TEMPLATE.md
-git commit -m "[Docs] round00 — 완료노트·교본 템플릿: NL-Lib 구성에서 디자인 참조를 빼고 수치·Azure 비용·리소스 정지 확인을 더한다"
+git commit -m "[Docs] round00 — 완료노트·교본 템플릿: 이전 프로젝트의 구성에서 디자인 참조를 빼고 수치·Azure 비용·리소스 정지 확인을 더한다"
 ```
 
 ---
@@ -1014,7 +1014,7 @@ Expected: `---` / `name: code-reviewer` / `description: ...` / `tools: Read, Gre
 
 ```bash
 git add .claude/agents/code-reviewer.md
-git commit -m "[Docs] round00 — code-reviewer 에이전트: NL-Lib 형식을 옮기고 RBAC·쓰기 도구 우회·프롬프트 인젝션 경로·클라우드 비용 점검을 더한다"
+git commit -m "[Docs] round00 — code-reviewer 에이전트: 이전 프로젝트의 형식을 옮기고 RBAC·쓰기 도구 우회·프롬프트 인젝션 경로·클라우드 비용 점검을 더한다"
 ```
 
 ---
@@ -1094,7 +1094,7 @@ Expected: `---` / `name: round-finish` / `description: hybrid-ops-agent 라운�
 
 ```bash
 git add .claude/skills/round-finish/SKILL.md
-git commit -m "[Docs] round00 — round-finish 스킬: NL-Lib 종료 절차를 옮기고 CI green 확인·AKS 정지 확인·main push 뒤 CI 확인을 더한다"
+git commit -m "[Docs] round00 — round-finish 스킬: 이전 프로젝트의 종료 절차를 옮기고 CI green 확인·AKS 정지 확인·main push 뒤 CI 확인을 더한다"
 ```
 
 ---
@@ -1256,7 +1256,7 @@ Expected: `린트·테스트`·`비밀값 검사(gitleaks, 전체 이력)` 두 �
 
 - [x] **Step 1: 영역별 리뷰를 병렬로 띄운다**
 
-이 저장소를 작업 폴더로 연 세션이면 `code-reviewer` 에이전트를 쓴다. 다른 저장소(NL-Lib 등)를 작업 폴더로 연 세션이면 그 세션의 `code-reviewer`는 NL-Lib 맥락이므로 쓰지 않는다 — general-purpose 에이전트에 "`C:\Users\LANDSOFT\mygit\hybrid-ops-agent\.claude\agents\code-reviewer.md`를 읽고 그 지시대로 리뷰하라, 파일은 수정하지 마라"고 넘긴다.
+이 저장소를 작업 폴더로 연 세션이면 `code-reviewer` 에이전트를 쓴다. 다른 저장소를 작업 폴더로 연 세션이면 그 세션의 `code-reviewer`는 그 저장소의 맥락이므로 쓰지 않는다 — general-purpose 에이전트에 "`<이 저장소>/.claude/agents/code-reviewer.md`를 읽고 그 지시대로 리뷰하라, 파일은 수정하지 마라"고 넘긴다.
 
 두 영역을 한 메시지에서 동시에 띄운다:
 - 영역 A(코드·설정): `pyproject.toml`·`agent/`·`uv.lock`(의존성만)·`.pre-commit-config.yaml`·`.github/workflows/ci.yml`·`.devcontainer/devcontainer.json`·`.gitattributes`·`.gitignore`. 기준: spec §7 round00 행, 이 plan Task 1~5.
@@ -1282,7 +1282,7 @@ high·medium은 모두 고친다. low는 고치거나, 고치지 않는 이유�
 순서: `.gitattributes` → `.gitignore` → `.python-version` → `pyproject.toml` → `agent/pyproject.toml` → `agent/src/hoa_agent/__init__.py` → `agent/src/hoa_agent/cli.py` → `agent/tests/test_cli.py` → `.pre-commit-config.yaml` → `.github/workflows/ci.yml` → `.devcontainer/devcontainer.json` → `CLAUDE.md` → `GIT_WORKFLOW.md` → `docs/standards/coding-standard.md` → `docs/ops/recurring-gotchas.md` → `docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md` → `docs/guides/_TEMPLATE.md` → `.claude/agents/code-reviewer.md` → `.claude/skills/round-finish/SKILL.md` → `README.md`. (`uv.lock`은 생성물이라 싣지 않고 「4. 검증」에 `uv sync`로 생성된다고 적는다.)
 
 「0. 사용자 프롬프트」:
-> NL-Lib에서 쓰던 라운드 개발 방식을 새 프로젝트에 옮겨, 클라우드(Azure)와 온프레미스(집 RTX 3060 PC)를 함께 쓰는 에이전트 시스템을 만들고 싶다. 많이 안 해본 것 위주로 — GraphRAG, LangGraph 멀티에이전트, MCP, 쿠버네티스 + IaC, 관측·자동 평가. round00은 그 출발점으로 빈 저장소에 개발 체계와 품질 게이트를 세운다.
+> 이전 프로젝트에서 쓰던 라운드 개발 방식을 새 프로젝트에 옮겨, 클라우드(Azure)와 온프레미스(집 RTX 3060 PC)를 함께 쓰는 에이전트 시스템을 만들고 싶다. 많이 안 해본 것 위주로 — GraphRAG, LangGraph 멀티에이전트, MCP, 쿠버네티스 + IaC, 관측·자동 평가. round00은 그 출발점으로 빈 저장소에 개발 체계와 품질 게이트를 세운다.
 
 「1. 설계 요약」: spec 링크, 그리고 이번 라운드 결정 네 가지 — (1) uv 워크스페이스 멤버 분리(이미지별 의존성), (2) 품질 게이트는 대상 파일이 있는 것만 라운드별로 도입, (3) gitleaks 이중화(pre-commit + CI 전체 이력), (4) `.gitattributes`로 LF 고정.
 

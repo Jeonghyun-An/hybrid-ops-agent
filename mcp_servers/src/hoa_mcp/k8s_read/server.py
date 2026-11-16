@@ -54,7 +54,8 @@ def reported[**P, R](tool: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R
 
 
 def build_server(reader: KubeReader, settings: ServerSettings) -> FastMCP:
-    server = FastMCP("hoa-k8s-read", instructions=INSTRUCTIONS)
+    # 요청마다 남는 INFO 줄이 hoa investigate의 표준오류를 덮지 않게 경고 이상만 남긴다
+    server = FastMCP("hoa-k8s-read", instructions=INSTRUCTIONS, log_level="WARNING")
 
     def check_namespace(namespace: str) -> None:
         if namespace not in settings.allowed_namespaces:
