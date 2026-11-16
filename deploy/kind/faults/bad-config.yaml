@@ -1,0 +1,10 @@
+# 장애 bad-config — deployment/inventory 의 HOA_DEMO_PORT 를 숫자가 아닌 값으로 바꾼다(strategic merge patch).
+# 새 파드는 시작하자마자 설정 오류 한 줄을 남기고 종료 코드 1로 끝나기를 반복한다(CrashLoopBackOff).
+spec:
+  template:
+    spec:
+      containers:
+        - name: inventory
+          env:
+            - name: HOA_DEMO_PORT
+              value: eighty

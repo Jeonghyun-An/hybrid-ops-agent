@@ -1,0 +1,6 @@
+# 로컬 티어 개발 클러스터 — 노드 이미지는 scripts/dev-cluster.sh 가 다이제스트까지 고정해 넘긴다.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: hoa
+nodes:
+  - role: control-plane

@@ -1,0 +1,8 @@
+# 장애 image-pull — deployment/orders 의 이미지를 없는 태그로 바꾼다(strategic merge patch).
+# 새 파드는 ErrImagePull → ImagePullBackOff, 이전 파드는 살아 있어 롤아웃만 멈춘다.
+spec:
+  template:
+    spec:
+      containers:
+        - name: orders
+          image: hoa-demo:0.1.0-missing

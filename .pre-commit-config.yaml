@@ -1,4 +1,5 @@
 # 커밋 직전 검사. ruff rev 는 pyproject.toml dev 그룹의 ruff 버전과, gitleaks rev 는 .github/workflows/ci.yml 의 gitleaks 다운로드 버전과 맞춘다.
+# shellcheck 는 CI도 pre-commit 으로 돌리므로 버전이 한 곳(rev)에만 있다.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -20,3 +21,7 @@ repos:
     rev: v8.30.1
     hooks:
       - id: gitleaks
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
