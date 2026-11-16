@@ -4,7 +4,7 @@ from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 from pydantic import BaseModel
 
 from hoa_agent.diagnosis import Diagnosis
-from hoa_agent.graph import StopReason
+from hoa_agent.graph import NOT_RUN, StopReason
 
 
 class ToolStep(BaseModel):
@@ -12,6 +12,7 @@ class ToolStep(BaseModel):
     args: dict[str, object]
     output: str
     error: bool
+    executed: bool
 
 
 class Usage(BaseModel):
@@ -59,6 +60,7 @@ def tool_steps(messages: Sequence[BaseMessage]) -> list[ToolStep]:
                     args=dict(call.get("args", {})),
                     output=text_of(message),
                     error=message.status == "error",
+                    executed=message.artifact != NOT_RUN,
                 )
             )
     return steps

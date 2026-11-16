@@ -7,8 +7,10 @@ import pytest
 from hoa_agent import __version__
 from hoa_agent.cli import main
 from hoa_agent.diagnosis import Diagnosis
+from hoa_agent.graph import DiagnosisSchemaError
 from hoa_agent.llm import LLMConfigError
-from hoa_agent.result import InvestigationResult, Usage
+from hoa_agent.mcp_tools import MCPSetupError
+from hoa_agent.result import InvestigationResult, ToolStep, Usage
 
 
 @pytest.fixture
@@ -18,7 +20,10 @@ def result(diagnosis: Diagnosis) -> InvestigationResult:
         alert="orders rollout stuck",
         diagnosis=diagnosis,
         stop_reason="answered",
-        steps=[],
+        steps=[
+            ToolStep(tool="list_pods", args={}, output="{}", error=False, executed=True),
+            ToolStep(tool="get_events", args={}, output="Not run", error=True, executed=False),
+        ],
         invalid_tool_calls=0,
         usage=Usage(model_calls=2, input_tokens=1_500, output_tokens=200, total_tokens=1_700),
         elapsed_seconds=4.2,
@@ -55,6 +60,7 @@ def test_investigate_prints_json_and_a_korean_summary(
     assert InvestigationResult.model_validate(json.loads(out)) == result
     assert "원인: image_pull_error" in err
     assert "[get_events] Failed to pull image" in err
+    assert "조사: 도구 1번" in err
 
 
 def test_model_defaults_to_gemma(result: InvestigationResult) -> None:
@@ -105,3 +111,20 @@ def test_rate_limit_exits_with_code_3_so_the_eval_runner_can_stop(
 
     assert main(["investigate", "--model", "gemini", "x"], investigator=fake) == 3
     assert "rate limit" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("error", "code"),
+    [
+        (DiagnosisSchemaError("the model broke the diagnosis schema"), 1),
+        (MCPSetupError("the MCP server stopped"), 2),
+    ],
+)
+def test_failures_map_to_exit_codes(
+    capsys: pytest.CaptureFixture[str], error: Exception, code: int
+) -> None:
+    async def fake(alert: str, model: str) -> InvestigationResult:
+        raise error
+
+    assert main(["investigate", "x"], investigator=fake) == code
+    assert str(error) in capsys.readouterr().err

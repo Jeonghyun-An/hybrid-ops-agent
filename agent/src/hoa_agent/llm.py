@@ -86,9 +86,10 @@ class ChatOpenAICompat(ChatOpenAI):
         self, input_: LanguageModelInput, *, stop: list[str] | None = None, **kwargs: object
     ) -> dict[str, object]:
         payload = super()._get_request_payload(input_, stop=stop, **kwargs)
-        messages = self._convert_input(input_).to_messages()
-        for message, sent in zip(messages, payload.get("messages", []), strict=False):
-            extras = message.additional_kwargs.get(TOOL_CALL_EXTRAS, {})
+        extras: dict[str, object] = {}
+        for message in self._convert_input(input_).to_messages():
+            extras.update(message.additional_kwargs.get(TOOL_CALL_EXTRAS, {}))
+        for sent in payload.get("messages", []):
             for call in sent.get("tool_calls", []):
                 if call["id"] in extras:
                     call["extra_content"] = extras[call["id"]]
@@ -103,4 +104,6 @@ def build_chat_model(profile: ModelProfile) -> ChatOpenAICompat:
         temperature=0,
         timeout=REQUEST_TIMEOUT_SECONDS,
         max_retries=MAX_RETRIES,
+        # 스트리밍 응답은 _create_chat_result를 거치지 않아 도구 호출 서명이 빠진다
+        disable_streaming=True,
     )

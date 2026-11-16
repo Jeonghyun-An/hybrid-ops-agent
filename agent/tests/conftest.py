@@ -17,8 +17,10 @@ class ScriptedChatModel(BaseChatModel):
 
     replies: list[AIMessage]
     diagnosis: Diagnosis | None
+    silent_failure: bool = False
     investigate_requests: list[list[BaseMessage]] = Field(default_factory=list)
     diagnose_requests: list[list[BaseMessage]] = Field(default_factory=list)
+    structured_kwargs: dict[str, object] = Field(default_factory=dict)
 
     @property
     def _llm_type(self) -> str:
@@ -38,11 +40,14 @@ class ScriptedChatModel(BaseChatModel):
         return self
 
     def with_structured_output(self, schema: object, **kwargs: object) -> Runnable:
+        self.structured_kwargs = dict(kwargs)
+
         def answer(messages: list[BaseMessage]) -> dict[str, object]:
             self.diagnose_requests.append(list(messages))
             if self.diagnosis is None:
-                raw = AIMessage("not json")
-                return {"raw": raw, "parsed": None, "parsing_error": ValueError("not json")}
+                raw = AIMessage("" if self.silent_failure else "not json")
+                error = None if self.silent_failure else ValueError("not json")
+                return {"raw": raw, "parsed": None, "parsing_error": error}
             raw = AIMessage(
                 self.diagnosis.model_dump_json(),
                 usage_metadata={"input_tokens": 900, "output_tokens": 120, "total_tokens": 1020},
@@ -87,9 +92,14 @@ def diagnosis() -> Diagnosis:
 @pytest.fixture
 def scripted_model(diagnosis: Diagnosis) -> Callable[..., ScriptedChatModel]:
     def build(
-        replies: list[AIMessage], *, diagnosis: Diagnosis | None = diagnosis
+        replies: list[AIMessage],
+        *,
+        diagnosis: Diagnosis | None = diagnosis,
+        silent_failure: bool = False,
     ) -> ScriptedChatModel:
-        return ScriptedChatModel(replies=replies, diagnosis=diagnosis)
+        return ScriptedChatModel(
+            replies=replies, diagnosis=diagnosis, silent_failure=silent_failure
+        )
 
     return build
 

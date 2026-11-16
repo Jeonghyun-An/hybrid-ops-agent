@@ -42,7 +42,8 @@ def render_summary(result: InvestigationResult) -> str:
         "근거:",
         *(f"  - [{item.tool}] {item.quote}" for item in diagnosis.evidence),
         (
-            f"조사: 도구 {len(result.steps)}번 · 모델 호출 {result.usage.model_calls}번 · "
+            f"조사: 도구 {sum(s.executed for s in result.steps)}번 · "
+            f"모델 호출 {result.usage.model_calls}번 · "
             f"토큰 {result.usage.total_tokens:,} · {result.elapsed_seconds:.1f}초 · "
             f"멈춘 이유 {result.stop_reason}"
         ),
@@ -51,7 +52,7 @@ def render_summary(result: InvestigationResult) -> str:
 
 
 def use_utf8_output() -> None:
-    """Windows에서 출력을 파일·파이프로 돌리면 로캘 인코딩(cp949)이 돼 — 같은 문자에서 깨진다."""
+    """Windows에서 출력을 파일·파이프로 돌리면 로캘 인코딩(cp949)이 돼 `—` 같은 문자에서 깨진다."""
     for stream in (sys.stdout, sys.stderr):
         if isinstance(stream, io.TextIOWrapper):
             stream.reconfigure(encoding="utf-8")
@@ -66,7 +67,7 @@ def investigate_command(args: argparse.Namespace, investigator: Investigator) ->
     except openai.RateLimitError as exc:
         print(f"hoa: the LLM rate limit was hit — {exc}", file=sys.stderr)
         return RATE_LIMITED_EXIT
-    except (DiagnosisSchemaError, openai.APIError) as exc:
+    except (DiagnosisSchemaError, openai.OpenAIError) as exc:
         print(f"hoa: investigation failed — {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
     print(result.model_dump_json(indent=2))

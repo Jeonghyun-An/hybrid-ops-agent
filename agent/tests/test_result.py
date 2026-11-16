@@ -3,6 +3,7 @@ from collections.abc import Callable
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from hoa_agent.diagnosis import Diagnosis
+from hoa_agent.graph import NOT_RUN, SKIPPED_TOOL_CALL
 from hoa_agent.result import build_result
 
 
@@ -66,3 +67,23 @@ def test_mcp_content_blocks_become_plain_text(
 
     assert result.steps[0].output == "line one\nline two"
     assert result.steps[0].error is True
+    assert result.steps[0].executed is True
+
+
+def test_calls_the_graph_did_not_run_are_marked(
+    make_reply: Callable[..., AIMessage],
+    make_tool_call: Callable[..., dict[str, object]],
+    diagnosis: Diagnosis,
+) -> None:
+    messages = [
+        make_reply(make_tool_call("list_pods", {"namespace": "demo"}, "c1")),
+        ToolMessage(
+            SKIPPED_TOOL_CALL, tool_call_id="c1", name="list_pods", status="error", artifact=NOT_RUN
+        ),
+    ]
+
+    result = build_result(
+        messages, diagnosis, "tool_budget", model="m", alert="a", elapsed_seconds=0
+    )
+
+    assert result.steps[0].executed is False

@@ -15,13 +15,16 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from hoa_agent.diagnosis import Diagnosis
 from hoa_agent.prompts import DIAGNOSE_PROMPT, SYSTEM_PROMPT
 
 StopReason = Literal["answered", "tool_budget", "token_budget"]
 SKIPPED_TOOL_CALL = "Not run: the investigation budget is used up."
+INVALID_TOOL_CALL = "Not run: the arguments were not valid JSON ({error}). Call the tool again."
+# 실행하지 않은 도구 호출에 붙인 답의 표시 — 결과의 도구 기록에서 실행한 호출과 나눈다
+NOT_RUN = {"not_run": True}
 
 
 class DiagnosisSchemaError(Exception):
@@ -50,9 +53,13 @@ def initial_state(alert: str) -> InvestigationState:
     )
 
 
+def last_reply(messages: Sequence[BaseMessage]) -> AIMessage:
+    return next(m for m in reversed(messages) if isinstance(m, AIMessage))
+
+
 def stop_reason(state: InvestigationState, budget: Budget) -> StopReason | None:
-    last = state.messages[-1]
-    if not isinstance(last, AIMessage) or not last.tool_calls:
+    reply = last_reply(state.messages)
+    if not reply.tool_calls and not reply.invalid_tool_calls:
         return "answered"
     if state.context_tokens >= budget.max_context_tokens:
         return "token_budget"
@@ -61,13 +68,36 @@ def stop_reason(state: InvestigationState, budget: Budget) -> StopReason | None:
     return None
 
 
-def skipped_calls(message: BaseMessage) -> list[ToolMessage]:
-    """예산 때문에 실행하지 않은 도구 호출에도 답을 붙인다 — 답 없는 tool_calls는 API가 거절한다."""
-    if not isinstance(message, AIMessage):
-        return []
+def invalid_call_answers(reply: AIMessage) -> list[ToolMessage]:
+    """인자 JSON이 깨진 도구 호출에도 오류 답을 붙인다 — 모델이 고쳐 다시 부르게 한다."""
     return [
-        ToolMessage(SKIPPED_TOOL_CALL, tool_call_id=call["id"], name=call["name"], status="error")
-        for call in message.tool_calls
+        ToolMessage(
+            INVALID_TOOL_CALL.format(error=call.get("error") or "unparsable"),
+            tool_call_id=call["id"],
+            name=call.get("name") or "",
+            status="error",
+            artifact=NOT_RUN,
+        )
+        for call in reply.invalid_tool_calls
+        if call.get("id")
+    ]
+
+
+def unanswered_calls(messages: Sequence[BaseMessage]) -> list[ToolMessage]:
+    """예산 때문에 실행하지 않은 도구 호출에도 답을 붙인다 — 답 없는 tool_calls는 API가 거절한다."""
+    index = max(i for i, m in enumerate(messages) if isinstance(m, AIMessage))
+    reply = messages[index]
+    answered = {m.tool_call_id for m in messages[index + 1 :] if isinstance(m, ToolMessage)}
+    return [
+        ToolMessage(
+            SKIPPED_TOOL_CALL,
+            tool_call_id=call["id"],
+            name=call["name"],
+            status="error",
+            artifact=NOT_RUN,
+        )
+        for call in reply.tool_calls
+        if call["id"] not in answered
     ]
 
 
@@ -81,20 +111,29 @@ def build_graph(
     async def investigate(state: InvestigationState) -> dict[str, object]:
         reply = await investigator.ainvoke(state.messages)
         context = reply.usage_metadata["input_tokens"] if reply.usage_metadata else 0
+        requested = len(reply.tool_calls) + len(reply.invalid_tool_calls)
         return {
-            "messages": [reply],
-            "tool_calls": state.tool_calls + len(reply.tool_calls),
+            "messages": [reply, *invalid_call_answers(reply)],
+            "tool_calls": state.tool_calls + requested,
             "context_tokens": max(context, state.context_tokens),
         }
 
-    def route(state: InvestigationState) -> Literal["tools", "diagnose"]:
-        return "tools" if stop_reason(state, limits) is None else "diagnose"
+    def route(state: InvestigationState) -> Literal["tools", "investigate", "diagnose"]:
+        if stop_reason(state, limits) is not None:
+            return "diagnose"
+        return "tools" if last_reply(state.messages).tool_calls else "investigate"
 
     async def diagnose(state: InvestigationState) -> dict[str, object]:
         reason = stop_reason(state, limits) or "answered"
-        pending = skipped_calls(state.messages[-1]) if reason != "answered" else []
+        pending = unanswered_calls(state.messages)
         request = [*state.messages, *pending, HumanMessage(DIAGNOSE_PROMPT)]
-        answer = await diagnoser.ainvoke(request)
+        try:
+            answer = await diagnoser.ainvoke(request)
+        except ValidationError as exc:
+            # json_schema 방식은 응답을 받는 자리에서 바로 검증해 include_raw를 거치지 않는다
+            raise DiagnosisSchemaError(
+                f"the model broke the diagnosis schema: {exc.error_count()} errors"
+            ) from exc
         if answer["parsing_error"] is not None or answer["parsed"] is None:
             raise DiagnosisSchemaError(
                 f"the model broke the diagnosis schema: {answer['parsing_error']}"

@@ -684,18 +684,22 @@ name = "hoa-agent"
 version = "0.1.0"
 source = { editable = "agent" }
 dependencies = [
+    { name = "langchain-core" },
     { name = "langchain-mcp-adapters" },
     { name = "langchain-openai" },
     { name = "langgraph" },
+    { name = "mcp" },
     { name = "openai" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "langchain-core", specifier = ">=1.8.1" },
     { name = "langchain-mcp-adapters", specifier = ">=0.3.2" },
-    { name = "langchain-openai", specifier = ">=1.8" },
+    { name = "langchain-openai", specifier = ">=1.8,<1.9" },
     { name = "langgraph", specifier = ">=1.2.22" },
+    { name = "mcp", specifier = ">=1.30,<2" },
     { name = "openai", specifier = ">=3.51" },
     { name = "pydantic", specifier = ">=2.14" },
 ]
