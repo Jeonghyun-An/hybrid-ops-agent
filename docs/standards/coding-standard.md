@@ -11,7 +11,7 @@
 
 ## 외부 호출 격리
 
-- LLM 호출은 멤버마다 한 모듈(`llm.py`)을 거친다. 온프레미스 vLLM(Gemma)과 클라우드 Gemini가 모두 OpenAI 호환 API라 클라이언트 하나를 설정으로 바꿔 쓰고(GPU 티어·로컬 티어도 설정 묶음으로 바꾼다), 역할(triage·diagnose·extract 등)마다 어느 모델을 쓸지도 `llm.py`가 정한다. 그래프 노드·도구 코드가 HTTP 클라이언트를 직접 만들지 않는다.
+- LLM 호출은 멤버마다 한 모듈(`llm.py`)을 거친다. 온프레미스 vLLM(Gemma)과 클라우드 Gemini가 모두 OpenAI 호환 API라 클라이언트 하나를 설정으로 바꿔 쓰고(GPU 티어·로컬 티어도 설정 묶음으로 바꾼다), 역할(triage·diagnose·extract 등)마다 어느 모델을 쓸지도 `llm.py`가 정한다. 그래프 노드·도구 코드가 HTTP 클라이언트를 직접 만들지 않는다. 엔드포인트마다 다른 점(Gemini 3가 도구 호출에 붙이는 `thought_signature`를 다음 요청에 되돌려 주기 등)도 `llm.py`가 흡수한다.
 - LLM을 쓰는 멤버(`agent`·`graphrag`·`eval`)가 각자 `llm.py`를 두는 중복은 허용한다(멤버 경계를 지키는 값). 공용 멤버로 뺄지는 두 번째 멤버가 LLM을 쓰기 시작하는 라운드에 정한다.
 - LLM 클라이언트는 주입받는다(모듈 전역에서 생성하지 않는다) — 테스트에서 가짜 LLM으로 바꿔 끼우기 위해서다.
 - 에이전트(`agent`)는 클러스터를 MCP 도구로만 만진다. 쿠버네티스 API 클라이언트는 MCP 서버(`mcp_servers`) 안에 두고, 예외는 에이전트가 아닌 두 곳뿐이다 — `graphrag` 구조 층 동기화 잡(읽기 전용 ServiceAccount)과 `eval` 러너의 장애 주입·복구(데모 네임스페이스 한정).
@@ -24,6 +24,7 @@
 - 모든 함수 인자·반환에 타입힌트를 단다(테스트 포함 — ruff `ANN`이 강제한다). `list[str]`·`X | None` 같은 최신 문법을 쓴다.
 - 경계 데이터(LangGraph 상태, MCP 도구 입출력, API 요청·응답, 평가 시나리오)는 Pydantic v2 모델로 정의한다. 경계를 넘는 bare `dict`는 쓰지 않는다.
 - 네트워크 I/O(LLM·MCP·DB·HTTP·k8s API)는 `async def`로 쓴다. CLI 진입점(`main`)은 동기로 두고 필요하면 `asyncio.run`으로 감싼다.
+- 하위 프로세스(`kubectl`·`hoa` CLI)를 하나씩 차례로 부르는 도구(평가 러너)는 동기 `subprocess.run`을 쓰고 컨텍스트·제한 시간·`encoding="utf-8"`을 명시한다. 하위 프로세스로 JSON을 넘기는 CLI는 표준출력을 UTF-8로 고정한다(`docs/ops/recurring-gotchas.md` 8번).
 
 ## 주석·docstring
 
@@ -35,11 +36,12 @@
 - 시스템 경계(API 입력, LLM 응답, MCP 도구 결과, k8s API 응답)에서만 검증한다. 내부 계층 간 호출은 서로를 신뢰한다.
 - 구체적 예외를 잡는다. 넓은 `except Exception`으로 여러 실패를 삼키지 않는다.
 - LLM 구조화 출력이 스키마를 어기면 기본값으로 조용히 메우지 않는다 — 재시도하거나 실패로 드러낸다.
+- CLI 종료 코드: 0 성공, 1 실행 실패, 2 설정·사용법 오류, 3 LLM 요청 한도. 평가 러너는 3을 보고 남은 회차를 멈춘다.
 
 ## 테스트
 
 - 새 기능은 실패하는 테스트 → 최소 구현 → 통과 순서(TDD)로 진행한다.
-- LLM은 결정적 응답을 내는 가짜 구현으로 바꿔 끼운다. mock 범위는 외부 호출로만 한정한다.
+- LLM은 결정적 응답을 내는 가짜 구현으로 바꿔 끼운다. mock 범위는 외부 호출로만 한정한다. 채팅 모델은 `BaseChatModel`을 상속한 대본 모델(`agent/tests/conftest.py`의 `ScriptedChatModel` — 정해 둔 `AIMessage`를 차례로 내고 `bind_tools`·`with_structured_output`을 흉내 낸다)로, OpenAI 호환 HTTP 계층은 httpx `MockTransport`로 바꾼다.
 - 쿠버네티스가 필요한 테스트는 kind에 붙는 통합 테스트로 분리하고 `integration` 마커를 단다. 마커는 루트 `pyproject.toml`에 등록돼 있고 기본 `pytest`에서 빠진다 — `uv run pytest -m integration`으로 따로 돌린다.
 - 비동기 테스트는 anyio pytest 플러그인으로 쓴다(`@pytest.mark.anyio`, 멤버마다 `tests/conftest.py`의 `anyio_backend` 픽스처). FastAPI 앱은 httpx `ASGITransport`로 부른다 — Starlette 1.x는 `TestClient`의 httpx 사용을 deprecated로 바꿨다.
 - 경고는 오류로 다룬다(`filterwarnings = ["error"]`), 등록하지 않은 마커는 오류다(`--strict-markers`).

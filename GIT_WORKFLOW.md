@@ -31,7 +31,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 - 작업 브랜치 → `dev`: 매번 사용자 채팅 승인 필수. 리뷰 게이트는 (1) `.claude/agents/code-reviewer.md` 서브에이전트의 정적 리뷰와 (2) 자가 점검 체크리스트(CI green + 관련 기능 수동 스모크 + 문서 갱신 여부)를 순서대로 통과하는 것이다.
 - 리뷰 발견 처리: high·medium은 모두 고친다. low는 고치거나, 고치지 않는 이유를 완료노트 「결정」에 한 줄로 적는다. 고친 뒤에는 CI를 다시 확인한다.
 - `dev` → `main`: 라운드 종료 판단·승인은 사용자. round02부터는 `main` push가 곧 배포다.
-- push: 작업 브랜치와 `dev`의 일반 push는 Claude가 따로 묻지 않고 한다. 강제 push와 원격 브랜치 삭제는 묻는다. `main` push는 위 라운드 종료 승인 없이는 하지 않는다. 라운드 흐름에서 사용자가 확인하는 지점은 spec·계획서(§라운드 생애주기 1·2)와 위 두 머지다 — 비용이 나는 클라우드 작업과 회사 서버의 기존 시스템을 건드리는 작업의 승인(`CLAUDE.md` §4)은 별도다.
+- push: 작업 브랜치와 `dev`의 일반 push는 Claude가 따로 묻지 않고 한다. 강제 push와 원격 브랜치 삭제는 묻는다. `main` push는 위 라운드 종료 승인 없이는 하지 않는다. 라운드 흐름에서 사용자가 확인하는 지점은 spec·계획서(§라운드 생애주기 1·2)와 위 두 머지다 — 비용이 나는 클라우드 작업과 회사 서버의 기존 시스템·서버 설정을 바꾸는 작업의 승인(`CLAUDE.md` §4)은 별도다.
 
 ## 커밋 메시지
 
@@ -74,6 +74,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 - GitHub CLI(`gh`)는 호스트에 설치하고 `gh auth login`한다 — CI 결과 확인과 `/round-finish`가 쓴다.
 - devcontainer는 작업 폴더와 `.git`을 호스트와 공유한다. 그래서 컨테이너의 venv는 작업 폴더 밖(`/home/vscode/.venv`, `UV_PROJECT_ENVIRONMENT`)에 두고, `pre-commit install`은 호스트에서만 한다 — 컨테이너에서 하면 공유된 훅이 컨테이너 Python을 가리켜 호스트 커밋이 깨진다. Windows 호스트에서는 커밋도 호스트에서 한다 — 호스트에서 설치한 훅 스크립트가 CRLF라 컨테이너에서 실행되지 않는다(`docs/ops/recurring-gotchas.md` 3번).
 - kind(로컬 티어, round01a): Docker Desktop, kind v0.33.0, kubectl(노드 v1.37과 ±1 마이너 — Docker Desktop에 들어 있다)을 호스트에 둔다. 처음 `up`하면 사용자 kubeconfig의 current-context가 `kind-hoa`로 바뀐다(스크립트와 테스트는 컨텍스트를 명시해서 쓴다). `bash scripts/dev-cluster.sh up`이 클러스터 `hoa`를 만들고 데모 앱을 빌드·적재·배포한 뒤 MCP 서버용 읽기 전용 kubeconfig(`~/.kube/hoa-kind-mcp-read.kubeconfig`, 토큰 12시간)를 쓴다. 그 밖의 명령은 `down`·`fault <image-pull|bad-config>`·`reset`·`mcp-kubeconfig`이고, 통합 테스트는 `uv run pytest -m integration`이다. kind와 통합 테스트는 호스트에서 돌린다 — devcontainer 안에서는 kind API 주소(`127.0.0.1`)에 닿지 않는다. Windows에서는 Git Bash로 실행한다.
+- LLM(round01b): 기본 모델은 GPU 티어 vLLM의 Gemma이고, Gemini(개인 Google 계정의 AI Studio 키 — 결제를 연결하지 않은 무료 등급)는 회사망 밖에서의 대체이자 평가의 비교 기준이다. 루트의 `.env`(커밋하지 않는다)에 `.env.example`의 변수를 채우고 `uv run --env-file .env <명령>`으로 넘긴다. 손으로 조사 한 번: `uv run --env-file .env hoa investigate "<경보 문장>"`(Gemini는 `--model gemini`). 평가: `uv run --env-file .env hoa-eval run --repeat 3` → 결과는 `eval/results/<시각>-<모델>.jsonl`(커밋하지 않는다), 표는 `uv run hoa-eval report eval/results/*.jsonl`. 둘 다 kind 클러스터와 MCP용 kubeconfig(`dev-cluster.sh up`·`mcp-kubeconfig`)가 있어야 한다. Gemini 무료 등급은 모델마다 하루 요청 수 한도가 있어 한도에 걸리면 `hoa-eval`이 남은 회차를 멈춘다(종료 코드 3) — 한도가 풀린 뒤 남은 시나리오만 `--scenario`로 다시 돌리고 `report`로 합친다.
 - 각 환경의 세부 절차(설치·접속·기동/정지)는 그 환경이 들어오는 라운드에 이 절에 더한다.
 
 ## 개발 가이드 문서 (필수)
