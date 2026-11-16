@@ -86,7 +86,7 @@ LangGraph `StateGraph`를 직접 짠다(사용자 결정 2026-11-16 — 기성 `
 ### 4.4 워크스페이스·이미지
 
 - 새 멤버 `eval`(`hoa-eval`)을 루트 `pyproject.toml` 다섯 곳에 등록하고, `demo_app/Dockerfile`과 `Dockerfile.dockerignore`에 `eval/pyproject.toml`을 더한다(코딩 표준 「패키지 경계」).
-- `agent` 의존성: `langgraph`, `langchain-openai`, `langchain-mcp-adapters`, `openai`(CLI가 요청 한도·API 오류를 직접 잡는다), `pydantic`. `eval` 의존성: `pydantic`, `pyyaml`. 버전은 plan에서 잠근다 — 확인한 조합: langgraph 1.2.22, langchain-core 1.8.1, langchain-openai 1.8.0, langchain-mcp-adapters 0.3.2(`mcp<2` — round01a에서 1.x로 고정한 이유).
+- `agent` 의존성: `langgraph`, `langchain-core`, `langchain-openai`(`<1.9` — 비공개 메서드를 재정의하므로 마이너를 묶는다), `langchain-mcp-adapters`, `mcp`(`<2`), `openai`(CLI가 요청 한도·API 오류를 직접 잡는다), `pydantic`. `eval` 의존성: `pydantic`, `pyyaml`. 버전은 plan에서 잠근다 — 확인한 조합: langgraph 1.2.22, langchain-core 1.8.1, langchain-openai 1.8.0, langchain-mcp-adapters 0.3.2(`mcp<2` — round01a에서 1.x로 고정한 이유).
 
 ## 5. 테스트·CI
 

@@ -26,7 +26,7 @@ def ratio(hits: int, total: int) -> str:
 def short_error(text: str) -> str:
     """완료노트(공개 저장소)에 옮길 표다 — 홈 경로를 가리고, 표를 깨는 `|`와 긴 원문을 줄인다."""
     home = str(Path.home())
-    for form in (home, home.replace("\\", "/")):
+    for form in (home.replace("\\", "\\\\"), home, home.replace("\\", "/")):
         text = text.replace(form, "~")
     text = " ".join(text.split()).replace("|", "\\|")
     return text if len(text) <= MAX_ERROR_CHARS else text[: MAX_ERROR_CHARS - 1] + "…"
@@ -84,7 +84,7 @@ def runs_table(records: Sequence[RunRecord]) -> str:
         if record.score is None or record.report is None:
             rows.append(
                 f"| {record.scenario} | {name} | {record.attempt} | - | - | - | - | - | - "
-                f"| {short_error(record.error or '-')} |"
+                f"| {short_error(record.error or record.reset_error or '-')} |"
             )
             continue
         s = record.score
@@ -92,6 +92,7 @@ def runs_table(records: Sequence[RunRecord]) -> str:
             f"| {record.scenario} | {name} | {record.attempt} "
             f"| {record.report.diagnosis.cause_label}{'' if s.label_correct else ' ✗'} "
             f"| {ratio(s.quotes_found, s.quotes)} | {s.tool_calls} | {s.tool_errors} "
-            f"| {s.elapsed_seconds:.1f} | {s.stop_reason} | - |"
+            f"| {s.elapsed_seconds:.1f} | {s.stop_reason} "
+            f"| {short_error(record.reset_error) if record.reset_error else '-'} |"
         )
     return "\n".join(rows)

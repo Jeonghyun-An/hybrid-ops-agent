@@ -46,7 +46,7 @@ uv run pytest -m integration
 
 `up`은 kind 클러스터 `hoa`에 데모 앱(gateway·orders·inventory)을 띄우고 MCP 서버용 읽기 전용 kubeconfig를 만든다. `fault image-pull`·`fault bad-config`로 장애를 심고 `reset`으로 되돌린다. 클러스터를 지울 때는 `down`.
 
-에이전트의 기본 LLM은 회사 GPU의 Gemma(vLLM)이고, 회사망 밖에서는 Gemini(무료 등급 API 키)를 `--model gemini`로 쓴다(평가도 `hoa-eval run --model gemini`). `.env.example`을 `.env`로 복사해 값을 채우고(`.env`는 커밋하지 않는다), 장애를 심은 클러스터에서 조사하거나 평가를 돌린다.
+에이전트의 기본 LLM은 회사 GPU의 Gemma(vLLM)이고, 회사망 밖에서는 Gemini(무료 등급 API 키)를 `--model gemini`로 쓴다(평가는 무료 등급 하루 한도 때문에 `hoa-eval run --model gemini --repeat 1`). `.env.example`을 `.env`로 복사해 값을 채우고(`.env`는 커밋하지 않는다), 장애를 심은 클러스터에서 조사하거나 평가를 돌린다.
 
 ```bash
 bash scripts/dev-cluster.sh fault image-pull

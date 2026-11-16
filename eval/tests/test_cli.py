@@ -19,7 +19,13 @@ def quiet_cluster() -> DemoCluster:
             )
         return ""
 
-    return DemoCluster(kubectl, sleep=lambda seconds: None, clock=lambda: 0.0)
+    now = [0.0]
+
+    def sleep(seconds: float) -> None:
+        now[0] += seconds
+
+    # 증상이 끝내 안 나오는 시나리오로 돌려도 가짜 시계가 흘러 120초 제한에서 끝난다
+    return DemoCluster(kubectl, sleep=sleep, clock=lambda: now[0])
 
 
 class BrokenCluster:

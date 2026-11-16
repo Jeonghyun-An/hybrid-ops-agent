@@ -117,6 +117,7 @@ def test_rate_limit_exits_with_code_3_so_the_eval_runner_can_stop(
     ("error", "code"),
     [
         (DiagnosisSchemaError("the model broke the diagnosis schema"), 1),
+        (openai.OpenAIError("finish_reason was length"), 1),
         (MCPSetupError("the MCP server stopped"), 2),
     ],
 )

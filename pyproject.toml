@@ -21,6 +21,8 @@ hoa-mcp = { workspace = true }
 dev = [
     "pre-commit>=4.7",
     "pytest>=9.2",
+    # 에이전트 테스트가 평가 시나리오 YAML을 읽는다(멤버 경계를 넘는 계약 확인)
+    "pyyaml>=6.0",
     "ruff==0.17.4",
 ]
 

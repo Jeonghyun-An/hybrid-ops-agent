@@ -28,7 +28,8 @@ class Score(BaseModel):
 
 
 def normalize(text: str) -> str:
-    return " ".join(text.translate(IGNORED_CHARS).split())
+    unescaped = re.sub(r"\\[nrt]", " ", text)
+    return " ".join(unescaped.translate(IGNORED_CHARS).split())
 
 
 def quote_found(quote: str, outputs: Iterable[str]) -> bool:
@@ -36,7 +37,10 @@ def quote_found(quote: str, outputs: Iterable[str]) -> bool:
     if len(needle) < MIN_QUOTE_CHARS:
         return False
     # 단어 중간에서 시작하거나 끝나는 일치(`restarts: 1` ⊂ `restarts: 12`)는 인용으로 치지 않는다
-    pattern = re.compile(rf"(?<![0-9A-Za-z]){re.escape(needle)}(?![0-9A-Za-z]|[.\-][0-9A-Za-z])")
+    pattern = re.compile(
+        rf"(?<![0-9A-Za-z_])(?<![0-9A-Za-z_][.\-]){re.escape(needle)}"
+        rf"(?![0-9A-Za-z_]|[.\-][0-9A-Za-z_])"
+    )
     return any(pattern.search(normalize(output)) for output in outputs)
 
 

@@ -43,7 +43,7 @@ async def run_investigation(
                 await build_graph(model, tools).ainvoke(initial_state(alert))
             )
     except (BaseExceptionGroup, McpError) as exc:
-        # MCP 클라이언트의 anyio 작업 그룹이 그래프의 예외를 묶어 올린다 — 하나면 풀어 올린다
+        # 작업 그룹이 묶어 올린 예외를 풀고, MCP 서버 시작 실패는 설정 오류로 바꾼다
         raise surfaced(exc) from None
     if final.diagnosis is None or final.stop_reason is None:
         raise RuntimeError("the investigation ended without a diagnosis")

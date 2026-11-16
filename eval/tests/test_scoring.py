@@ -36,10 +36,17 @@ def test_quotes_match_despite_json_escapes_quotes_and_spacing(quote: str) -> Non
         "restarts: 1",
         "hoa-demo:0.1.0",
         "ack-off pulling image",
+        "off pulling image hoa-demo",
+        "1.0-missing, restarts: 12",
+        "message: Back-off pulling",
     ],
 )
 def test_made_up_short_or_partial_quotes_do_not_match(quote: str) -> None:
     assert quote_found(quote, [OUTPUT]) is False
+
+
+def test_escaped_line_breaks_count_as_spaces() -> None:
+    assert quote_found("line one", ["line one\\nline two"]) is True
 
 
 def test_correct_diagnosis_scores_label_target_and_quotes(

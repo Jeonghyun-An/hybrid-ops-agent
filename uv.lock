@@ -850,6 +850,7 @@ dependencies = [
 dev = [
     { name = "pre-commit" },
     { name = "pytest" },
+    { name = "pyyaml" },
     { name = "ruff" },
 ]
 
@@ -865,6 +866,7 @@ requires-dist = [
 dev = [
     { name = "pre-commit", specifier = ">=4.7" },
     { name = "pytest", specifier = ">=9.2" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", specifier = "==0.17.4" },
 ]
 
