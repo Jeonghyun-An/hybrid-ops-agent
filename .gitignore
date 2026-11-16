@@ -36,6 +36,9 @@ dist/
 .idea/
 .claude/settings.local.json
 
+# 평가 결과 원본 — 요약 표만 완료노트에 옮긴다
+eval/results/
+
 # 로그·디버그 출력
 *.log
 *_debug_out*.txt

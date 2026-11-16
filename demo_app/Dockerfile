@@ -12,6 +12,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY agent/pyproject.toml agent/
 COPY demo_app/pyproject.toml demo_app/
+COPY eval/pyproject.toml eval/
 COPY mcp_servers/pyproject.toml mcp_servers/
 RUN uv sync --locked --package hoa-demo --no-dev --no-install-workspace
 COPY demo_app/src demo_app/src

@@ -3,37 +3,40 @@ name = "hybrid-ops-agent"
 version = "0.0.0"
 description = "온프레미스(k3s)와 GCP(GKE)를 함께 쓰는 쿠버네티스 운영 에이전트 — uv 워크스페이스 루트"
 requires-python = ">=3.12"
-dependencies = ["hoa-agent", "hoa-demo", "hoa-mcp"]
+dependencies = ["hoa-agent", "hoa-demo", "hoa-eval", "hoa-mcp"]
 
 [tool.uv]
 required-version = ">=0.11.31,<0.12"
 
 [tool.uv.workspace]
-members = ["agent", "demo_app", "mcp_servers"]
+members = ["agent", "demo_app", "eval", "mcp_servers"]
 
 [tool.uv.sources]
 hoa-agent = { workspace = true }
 hoa-demo = { workspace = true }
+hoa-eval = { workspace = true }
 hoa-mcp = { workspace = true }
 
 [dependency-groups]
 dev = [
     "pre-commit>=4.7",
     "pytest>=9.2",
+    # 에이전트 테스트가 평가 시나리오 YAML을 읽는다(멤버 경계를 넘는 계약 확인)
+    "pyyaml>=6.0",
     "ruff==0.17.4",
 ]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["agent/src", "demo_app/src", "mcp_servers/src"]
+src = ["agent/src", "demo_app/src", "eval/src", "mcp_servers/src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ANN"]
 
 [tool.pytest.ini_options]
 addopts = '--import-mode=importlib --strict-markers -m "not integration"'
-testpaths = ["agent/tests", "demo_app/tests", "mcp_servers/tests", "scripts/tests"]
+testpaths = ["agent/tests", "demo_app/tests", "eval/tests", "mcp_servers/tests", "scripts/tests"]
 filterwarnings = ["error"]
 markers = [
     "integration: kind 클러스터가 필요한 통합 테스트 — uv run pytest -m integration 으로 따로 돈다",

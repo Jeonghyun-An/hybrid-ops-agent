@@ -5,5 +5,6 @@
 !agent/pyproject.toml
 !demo_app/pyproject.toml
 !demo_app/src
+!eval/pyproject.toml
 !mcp_servers/pyproject.toml
 **/__pycache__

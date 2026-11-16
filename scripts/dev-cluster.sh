@@ -39,6 +39,20 @@ wait_rollouts() {
   done
 }
 
+# rollout status는 새 파드만 기다린다 — 종료 중인 옛 파드가 남으면 바로 뒤의 장애 주입·조사에 섞인다
+wait_settled() {
+  local left="" i
+  for ((i = 0; i < 40; i++)); do
+    left="$(k -n demo get pods -o jsonpath='{range .items[?(@.metadata.deletionTimestamp)]}{.metadata.name}{" "}{end}')"
+    if [[ -z "${left}" ]]; then
+      return 0
+    fi
+    sleep 3
+  done
+  echo "복구 뒤에도 종료 중인 파드가 남았다: ${left}" >&2
+  return 1
+}
+
 cmd_up() {
   local existed=true clusters
   check_kind_version
@@ -91,6 +105,7 @@ cmd_reset() {
   # 진행 기한(progressDeadlineSeconds)을 넘긴 장애도 rollout status가 실패하지 않게 새 ReplicaSet으로 다시 시작한다
   k -n demo rollout restart deployment
   wait_rollouts
+  wait_settled
 }
 
 cmd_mcp_kubeconfig() {
