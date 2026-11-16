@@ -43,3 +43,11 @@
 - **원인**: MCP Python SDK 2.0에서 FastMCP가 `mcp.server.mcpserver.MCPServer`로 바뀌었다. uv 워크스페이스는 잠금 파일 하나라 멤버마다 다른 메이저를 쓸 수 없다.
 - **해결**: `mcp_servers/pyproject.toml`에서 `mcp>=1.30,<2`로 고정한다.
 - **재발 방지**: `langchain-mcp-adapters`가 2.x를 지원하면 서버(FastMCP → MCPServer)와 에이전트를 같은 라운드에 함께 올린다.
+
+## 6. `kubernetes_asyncio`의 파드 로그가 JSON 한 덩어리면 원문이 바뀐다
+
+- **날짜**: 2026-11-16 (round01a, 정적 리뷰에서 발견)
+- **증상**: `read_namespaced_pod_log` 결과가 로그 원문과 다르다. 본문 전체가 JSON 값 하나이면 `{"level":"error"}`가 `{'level': 'error'}`로, `true`가 `True`로 바뀌고, 본문이 `null`이면 `None`이 돌아온다. UTF-8이 아닌 바이트가 섞이면 디코딩 오류로 실패한다.
+- **원인**: 생성된 클라이언트가 응답 타입 `str`을 역직렬화할 때 본문을 먼저 `json.loads`하고 그 결과를 `str()`로 바꾼다. 디코딩도 엄격한 UTF-8이다.
+- **해결**: `_preload_content=False`로 받아 `ApiClient`를 닫기 전에 `await response.read()`로 원문 바이트를 읽고 `decode("utf-8", errors="replace")`한다. `limit_bytes`로 거대한 줄도 막는다(`mcp_servers/src/hoa_mcp/k8s_read/kube.py`).
+- **재발 방지**: 생성된 클라이언트로 텍스트 본문(로그 등)을 받을 때는 원문 바이트로 받는다.

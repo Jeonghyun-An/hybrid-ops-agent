@@ -1,7 +1,7 @@
 # round01a — kind 개발 클러스터·데모 앱·MCP `k8s-read` 설계
 
-> 상태: 초안(2026-11-11) — 사용자 검토 대기
-> 라운드: round01a. round01을 성격에 따라 둘로 나눈 앞쪽이다 — 01a는 클러스터·데모 앱·MCP 읽기 도구(LLM 없음), 01b는 에이전트·LLM 두 티어·평가 러너 v0.
+> 상태: 확정(2026-11-11, 사용자 승인). 구현 중 정적 리뷰 반영으로 §5를 고쳤다.
+> 라운드: round01a. round01을 성격에 따라 둘로 나눈 앞쪽이다 — 01a는 클러스터·데모 앱·MCP 읽기 도구(LLM 없음), 01b는 에이전트·LLM 두 종(Gemini·Gemma)·평가 러너 v0.
 > 전체 설계: `docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md` — 이 라운드에서 §7.3대로 고친다.
 > 브랜치: `feat/round01a-kind-mcp-read`
 
@@ -35,7 +35,7 @@
 
 ### 3.1 클라우드: Azure → GCP
 
-- 이유: Azure 무료 체험은 Azure OpenAI 할당량이 0이라 round01부터 종량제가 필요하다. GCP 무료 체험($300, 90일)은 자동 과금이 없다. 학습 대상 기술은 클라우드 종류에 기대지 않는다. (팀장 권고, 사용자 결정 2026-11-10)
+- 이유: Azure 무료 체험은 Azure OpenAI 할당량이 0이라 round01부터 종량제가 필요하다. GCP 무료 체험($300, 90일)은 자동 과금이 없다. 학습 대상 기술은 클라우드 종류에 기대지 않는다. (사용자 결정 2026-11-10)
 - 대응: AKS → GKE, Azure OpenAI → Gemini, Key Vault → Secret Manager, AKS Workload Identity → GKE Workload Identity Federation, `az aks stop` → GKE 노드를 0으로 줄이기(Standard 노드 풀인지 Autopilot인지는 round03에서 정한다).
 - 시점: round01~02는 Google AI Studio의 Gemini API 무료 등급 키(개인 Google 계정, 결제 미연결)만 쓴다. GCP 무료 체험은 GKE가 처음 필요한 round03 직전에 시작한다 — 90일이 가입 시점부터 흐르고 멈출 수 없다.
 
@@ -45,12 +45,12 @@
 - 집 RTX 3060 PC는 계획에서 뺀다. 개발 PC와 GPU 서버가 같은 망에 있어 집↔회사 터널이 필요 없고, GPU도 더 크다.
 - 로컬 LLM은 서버에 이미 vLLM으로 떠 있는 Gemma 4 26B A4B를 쓴다. MoE 모델이라 전체 25.2B 중 토큰마다 3.8B만 계산하고, 도구 호출을 지원한다(vLLM `--enable-auto-tool-choice --tool-call-parser gemma4`). 현재 `--max-model-len 32768`이다.
 - round01b는 이 인스턴스를 그대로 부르고, round02에서 같은 모델을 이 프로젝트의 k3s(GPU Operator·Helm·Argo CD) 관리로 옮긴다 — GPU 메모리를 두 배로 쓰지 않으면서 vLLM 운영을 익힌다.
-- Neo4j는 GPU를 쓰지 않지만, 예전에 이 서버에서 메모리를 크게 잡아 무거웠다. 둘 곳과 메모리 한도는 round05에서 정한다.
+- Neo4j는 GPU를 쓰지 않지만, 메모리를 명시하지 않으면 서버 RAM에 맞춰 크게 잡는다. 둘 곳과 메모리 한도는 round05에서 정한다.
 
 ### 3.3 round01 나누기
 
 - round01a(이 문서) — 클러스터·데모 앱·MCP 읽기 도구. LLM 없이 끝까지 검증된다.
-- round01b — LangGraph 단일 에이전트, LLM 두 티어(Gemini·Gemma), 평가 러너 v0. 01a가 끝난 뒤 따로 spec을 쓴다(§11).
+- round01b — LangGraph 단일 에이전트, LLM 두 종(Gemini·Gemma), 평가 러너 v0. 01a가 끝난 뒤 따로 spec을 쓴다(§11).
 
 ## 4. 실행 티어와 회사 자원 경계
 
@@ -100,7 +100,7 @@
 - 이미지 하나에 역할을 환경변수로 고른다 — `HOA_DEMO_ROLE`(gateway·orders·inventory), `HOA_DEMO_PORT`, 하류 주소(`HOA_DEMO_ORDERS_URL`, `HOA_DEMO_INVENTORY_URL`). 시작할 때 Pydantic 모델로 설정을 검증하고, 틀리면 무엇이 틀렸는지 한 줄 로그를 남기고 종료 코드 1로 끝난다 — 장애 `bad-config`의 단서가 된다.
 - 이미지:
   - `demo_app/Dockerfile`, 빌드 컨텍스트는 저장소 루트. 무시 목록은 `demo_app/Dockerfile.dockerignore`에 둔다 — BuildKit이 Dockerfile 옆의 이 파일을 읽으므로 루트에 `.dockerignore`를 두지 않고 `CLAUDE.md` §2의 루트 규칙을 지킨다.
-  - 의존성은 `uv sync --locked --package hoa-demo --no-dev`로 이 멤버 것만 설치한다(round00 이월).
+  - 의존성은 `uv sync --locked --package hoa-demo --no-dev`로 이 멤버 것만 설치한다(round00 이월). 빌드 단계와 실행 단계를 나눠 실행 이미지에는 가상환경만 옮기고, `65532:65532`(비루트 사용자·그룹)로 돈다.
   - 태그는 `hoa-demo:0.1.0`으로 고정한다. 레지스트리에 올리지 않고 `kind load`로만 넣는다.
 - 매니페스트: Deployment마다 replicas 1, resources requests/limits, 프로브, 기본 RollingUpdate, `progressDeadlineSeconds: 120`(멈춘 롤아웃이 2분 안에 `ProgressDeadlineExceeded`로 드러나게). Service는 ClusterIP.
 
@@ -136,16 +136,17 @@
 | `get_pod_logs` | `namespace`, `pod`, `container`(선택), `previous`(기본 false), `tail_lines`(기본 100, 최대 200) | 로그 줄 목록(최신 줄을 남긴다) |
 
 - **출력 상한**(GPU 티어 32K 문맥 기준): 도구 응답 하나를 직렬화한 크기가 12,000자(약 3K 토큰)를 넘지 않게 자른다. 로그 줄은 500자, 이벤트 메시지는 300자에서 자르고, 목록은 개수로 자른다(로그는 앞쪽, 이벤트는 오래된 쪽을 버린다). 잘렸으면 출력의 `truncated: true`로 알린다. 근거: 시스템 프롬프트·도구 정의 약 3K 토큰 + 도구 호출 6번 × 3K 토큰이면 32K 안에 답변 여유가 남는다. 조사 1건의 누적 예산은 01b에서 정한다.
-- **비밀값 가리기**: 환경변수 이름에 `PASSWORD`·`SECRET`·`TOKEN`·`KEY`·`CREDENTIAL`이 들어 있으면(대소문자 무시) 값을 `***`로 가린다. `valueFrom`(Secret·ConfigMap 참조)은 참조 이름만 보이고 값은 읽지 않는다. 로컬 티어에서는 도구 출력이 외부 API(Gemini)로 나가므로 필요한 장치다.
+- **비밀값 가리기**: 환경변수 이름에 `PASSWORD`·`PASSWD`·`PWD`·`PASSPHRASE`·`SECRET`·`TOKEN`·`KEY`·`CREDENTIAL`·`AUTH`·`DSN`·`PRIVATE`·`CONNECTION_STRING`이 들어 있으면(대소문자 무시) 값을 `***`로 가린다. 값 안의 비밀(URL의 비밀번호, JWT, PEM 블록)은 환경변수·로그·이벤트·조건 메시지 모두에서 지운다. `valueFrom`·`envFrom`(Secret·ConfigMap 참조)은 참조 이름만 보이고 값은 읽지 않는다. 컨테이너당 환경변수는 40개까지 보이고 넘으면 `truncated`로 알린다. 로컬 티어에서는 도구 출력이 외부 API(Gemini)로 나가므로 필요한 장치다.
 - **허용 네임스페이스**: `HOA_MCP_ALLOWED_NAMESPACES`(쉼표로 구분, 기본 `demo`). 서버가 먼저 확인하고, 밖이면 쿠버네티스를 부르지 않고 도구 오류(`namespace not allowed`)를 돌려준다. RBAC(§5.5)와 이중 방어다 — 서버 확인은 알아보기 쉬운 오류를, RBAC는 실제 경계를 맡는다.
-- **오류**: 쿠버네티스 403·404는 도구 오류(MCP `isError`)로 바꿔 무엇이 없는지, 권한이 없는지 적는다. 그 밖의 예외는 숨기지 않고 드러낸다(코딩 표준 「에러 처리」).
+- **오류**: 쿠버네티스 API 오류는 도구 오류(MCP `isError`)로 바꿔 상태 코드와 메시지를 적는다(401이면 토큰을 다시 받는 명령을 덧붙인다). 연결 실패·응답 없음(20초)은 API 서버 주소를 빼고 알린다. 그 밖의 예상 밖 예외는 서버 로그(stderr)에 traceback을 남기고 모델에는 예외 종류만 알린다 — 원문에 내부 주소가 섞일 수 있어서다. 출력이 상한 안으로 줄어들지 않으면 넘치는 응답 대신 도구 오류를 낸다.
+- **입력 검증**: 네임스페이스·이름 인자는 쿠버네티스 이름 규칙(소문자·숫자·`-`·`.`)으로 검증한다 — field selector에 조건을 덧붙이는 입력을 막는다. 도구에는 읽기 전용 표시(`readOnlyHint`)를 단다.
 - **설정과 진입점**: `HOA_MCP_KUBECONFIG`(kubeconfig 경로), `HOA_MCP_ALLOWED_NAMESPACES`. 콘솔 스크립트 `hoa-mcp-k8s-read`가 stdio로 서버를 띄운다.
 - **구조**: 쿠버네티스 응답을 출력 모델로 바꾸는 부분은 순수 함수로 두어 단위 테스트한다. API를 부르는 부분은 주입받는 얇은 계층으로 두어 테스트에서 가짜로 바꾼다.
 
 ### 5.5 RBAC와 자격 증명
 
 - Namespace `hoa-system`에 ServiceAccount `hoa-mcp-read`를 둔다.
-- ClusterRole `hoa-k8s-read`: `get`·`list`·`watch` — 도구가 실제로 읽는 `pods`, `pods/log`, `events`(core), `deployments`, `replicasets`만 둔다. Service·EndpointSlice는 그것을 읽는 도구(Service 셀렉터 장애)가 들어올 때 더한다. Secret·ConfigMap은 넣지 않고 `*`도 쓰지 않는다.
+- ClusterRole `hoa-k8s-read`: 도구가 실제로 읽는 리소스와 동사만 둔다 — `pods`·`events`(core)·`deployments`·`replicasets`는 `get`·`list`, `pods/log`는 `get`. `watch`는 쓰지 않는다. Service·EndpointSlice는 그것을 읽는 도구(Service 셀렉터 장애)가 들어올 때 더한다. Secret·ConfigMap은 넣지 않고 `*`도 쓰지 않는다.
 - `demo` 네임스페이스의 RoleBinding으로 위 ClusterRole을 묶는다 — 권한 정의는 한 번(ClusterRole), 범위는 네임스페이스(RoleBinding)로 좁히는 쿠버네티스 관용 방식이다.
 - 토큰: `kubectl create token hoa-mcp-read -n hoa-system --duration=12h`로 만료가 있는 토큰을 받아 kubeconfig를 쓴다. 기본 경로는 저장소 밖 `~/.kube/hoa-kind-mcp-read.kubeconfig`(CI는 `$RUNNER_TEMP`), 파일 권한은 600이다. 저장소 안에 실수로 두더라도 `.gitignore`의 `*.kubeconfig`에 걸린다.
 

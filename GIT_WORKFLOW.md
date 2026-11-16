@@ -11,8 +11,8 @@
 | `<type>/round<NN>-<설명>` | 작업 브랜치 | `dev`에서 분기. 한 작업 단위 = 한 브랜치. |
 
 - 타입(Conventional): `feat`·`fix`·`docs`·`chore`·`refactor`·`test`
-- 설명은 영문 kebab-case(예: `feat/round01-end-to-end`) — 한글 브랜치명은 Windows·CI 호환성 문제로 쓰지 않는다.
-- 서브라운드: 한 라운드가 성격이 다른 여러 덩어리로 쪼개지면 소문자 접미를 붙인다(`round02a`, `round02b`…). 접미는 성격 라벨이며 실행 순서가 아니다. 파일·폴더 이름에도 접미를 그대로 쓴다(`round01a-완료노트.md`, `docs/guides/round01a/`).
+- 설명은 영문 kebab-case(예: `feat/round01a-kind-mcp-read`) — 한글 브랜치명은 Windows·CI 호환성 문제로 쓰지 않는다.
+- 접미 라운드: 한 라운드가 성격이 다른 여러 덩어리로 쪼개지면 소문자 접미를 붙인다(`round02a`, `round02b`…). 접미는 성격 라벨이며 실행 순서가 아니다. 접미 라운드도 각각 한 라운드로 센다 — spec·plan·완료노트·교본을 따로 두고, 파일·폴더·브랜치 이름과 머지 커밋에 접미를 그대로 쓴다(`round01a-완료노트.md`, `docs/guides/round01a/`, `feat/round01a-…`, `— round01a (…)`).
 
 ## 흐름
 
@@ -58,7 +58,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 - 검사는 그 파일 종류가 처음 생기는 라운드에 더한다 — 대상 없는 검사는 아무것도 증명하지 못한다.
 - `terraform apply`는 CI에서 돌리지 않는다. 로컬에서 사용자 승인 뒤 손으로만 한다.
 - 클론한 뒤 한 번(호스트에서): `uv run pre-commit install`. devcontainer 안에서는 하지 않는다(§개발 환경).
-- 두 곳에 적힌 도구 버전은 같이 올린다: ruff는 `pyproject.toml` dev 그룹과 `.pre-commit-config.yaml` rev, gitleaks는 `.pre-commit-config.yaml` rev와 `.github/workflows/ci.yml` 다운로드 URL. uv는 `pyproject.toml`의 `[tool.uv] required-version`이 정본이다 — CI(setup-uv)는 이 값을 읽고, devcontainer `postCreateCommand`의 `pipx install` 버전 범위는 손으로 맞춘다. kind는 `.github/workflows/ci.yml`의 다운로드 버전과 `scripts/dev-cluster.sh`의 `KIND_VERSION`을, kubectl은 `ci.yml`의 다운로드 버전과 `.devcontainer/devcontainer.json`의 kubectl 버전을 같이 올린다(kind 노드 이미지와 같은 마이너).
+- 두 곳에 적힌 도구 버전은 같이 올린다: ruff는 `pyproject.toml` dev 그룹과 `.pre-commit-config.yaml` rev, gitleaks는 `.pre-commit-config.yaml` rev와 `.github/workflows/ci.yml` 다운로드 URL. uv는 `pyproject.toml`의 `[tool.uv] required-version`이 정본이다 — CI(setup-uv)는 이 값을 읽고, devcontainer `postCreateCommand`의 `pipx install` 버전 범위는 손으로 맞춘다. kind는 `.github/workflows/ci.yml`의 다운로드 버전, `scripts/dev-cluster.sh`의 `KIND_VERSION`과 `NODE_IMAGE`(그 kind 릴리스 노트의 다이제스트), 이 문서·`README.md`의 kind 버전을, kubectl은 `ci.yml`의 다운로드 버전과 `.devcontainer/devcontainer.json`의 kubectl 버전을 같이 올린다(kind 노드 이미지와 같은 마이너).
 
 ## 개발 환경
 
@@ -73,7 +73,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 - Python: `uv sync` → `uv run pytest`. Python 버전은 `.python-version`(3.12)에 맞춰 uv가 준비한다.
 - GitHub CLI(`gh`)는 호스트에 설치하고 `gh auth login`한다 — CI 결과 확인과 `/round-finish`가 쓴다.
 - devcontainer는 작업 폴더와 `.git`을 호스트와 공유한다. 그래서 컨테이너의 venv는 작업 폴더 밖(`/home/vscode/.venv`, `UV_PROJECT_ENVIRONMENT`)에 두고, `pre-commit install`은 호스트에서만 한다 — 컨테이너에서 하면 공유된 훅이 컨테이너 Python을 가리켜 호스트 커밋이 깨진다. Windows 호스트에서는 커밋도 호스트에서 한다 — 호스트에서 설치한 훅 스크립트가 CRLF라 컨테이너에서 실행되지 않는다(`docs/ops/recurring-gotchas.md` 3번).
-- kind(로컬 티어, round01a): Docker Desktop과 kind v0.33.0을 호스트에 설치한다. `bash scripts/dev-cluster.sh up`이 클러스터 `hoa`를 만들고 데모 앱을 빌드·적재·배포한 뒤 MCP 서버용 읽기 전용 kubeconfig(`~/.kube/hoa-kind-mcp-read.kubeconfig`, 토큰 12시간)를 쓴다. 그 밖의 명령은 `down`·`fault <image-pull|bad-config>`·`reset`·`mcp-kubeconfig`이고, 통합 테스트는 `uv run pytest -m integration`이다. kind와 통합 테스트는 호스트에서 돌린다 — devcontainer 안에서는 kind API 주소(`127.0.0.1`)에 닿지 않는다. Windows에서는 Git Bash로 실행한다.
+- kind(로컬 티어, round01a): Docker Desktop, kind v0.33.0, kubectl(노드 v1.37과 ±1 마이너 — Docker Desktop에 들어 있다)을 호스트에 둔다. 처음 `up`하면 사용자 kubeconfig의 current-context가 `kind-hoa`로 바뀐다(스크립트와 테스트는 컨텍스트를 명시해서 쓴다). `bash scripts/dev-cluster.sh up`이 클러스터 `hoa`를 만들고 데모 앱을 빌드·적재·배포한 뒤 MCP 서버용 읽기 전용 kubeconfig(`~/.kube/hoa-kind-mcp-read.kubeconfig`, 토큰 12시간)를 쓴다. 그 밖의 명령은 `down`·`fault <image-pull|bad-config>`·`reset`·`mcp-kubeconfig`이고, 통합 테스트는 `uv run pytest -m integration`이다. kind와 통합 테스트는 호스트에서 돌린다 — devcontainer 안에서는 kind API 주소(`127.0.0.1`)에 닿지 않는다. Windows에서는 Git Bash로 실행한다.
 - 각 환경의 세부 절차(설치·접속·기동/정지)는 그 환경이 들어오는 라운드에 이 절에 더한다.
 
 ## 개발 가이드 문서 (필수)
@@ -88,7 +88,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 2. 계획: `docs/superpowers/plans/`에 구현 계획 작성(writing-plans 스킬) → 계획서 파일 자체를 사용자에게 보내(채팅 요약으로 대신하지 않는다) 확인받은 뒤 구현한다.
 3. 구현: TDD(`docs/standards/coding-standard.md`).
 4. 리뷰: `.claude/agents/code-reviewer.md` 서브에이전트로 정적 리뷰 → 발견 처리(§머지 승인 규칙).
-5. 검증: CI green + 관련 기능 수동 스모크(round01부터 평가 러너 시나리오 포함).
+5. 검증: CI green + 관련 기능 수동 스모크(round01b부터 평가 러너 시나리오 포함).
 6. 문서: 작업 브랜치에서 교본(`docs/guides/round<NN>/`)·완료노트(`docs/roadmap/round<NN>-완료노트.md`, 템플릿 `docs/roadmap/_ROUND_COMPLETE_TEMPLATE.md`)를 쓰고 `docs/roadmap/00_status.md`를 갱신 → 교본 대조 리뷰(§개발 가이드 문서).
 7. 머지: 사용자 승인 → 작업 브랜치를 `dev`에 `--no-ff` 머지·push → `dev`에서 완료노트 「상태」의 `dev` 머지 승인 줄을 체크·커밋·push(`dev` CI).
 8. 라운드 종료: 사용자 승인 → `/round-finish` 스킬로 `dev→main` 머지 + `origin` push → `dev`에서 완료노트 마지막 줄을 체크·커밋해 `dev`에만 push(다음 라운드 머지 때 `main`에 함께 올라간다).

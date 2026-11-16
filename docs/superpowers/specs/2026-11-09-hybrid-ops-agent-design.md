@@ -29,9 +29,9 @@
 | 클라우드 | GCP — GKE, Gemini, Secret Manager | 무료 체험($300, 90일)은 자동 과금이 없다. Azure 무료 체험은 Azure OpenAI 할당량이 0이라 바꿨다(2026-11-10) |
 | 비용 운영 | GKE 노드는 작업할 때만 켜고 끝나면 0으로 줄인다, 상시 켜둘 것은 온프레미스에. GCP 무료 체험은 GKE가 처음 필요한 round03 직전에 시작한다 | 체험 크레딧 안에서 끝낸다 |
 | 클라우드 LLM | Gemini — round01~02는 Google AI Studio 무료 등급 키(결제 미연결), round03부터 Vertex AI | 무료 등급으로 시작할 수 있고, OpenAI 호환 엔드포인트가 있어 클라이언트 하나로 부른다 |
-| 로컬 LLM | 회사 GPU 서버의 vLLM — Gemma 4 26B A4B(MoE, 전체 25.2B·활성 3.8B, 도구 호출 지원, 문맥 32K) + 임베딩 모델(round02) | 요청 수 제한 없이 많이 부르는 일(조사 반복·평가)을 맡긴다 |
-| 실행 티어 | GPU 티어(회사 GPU 서버의 k3s + Gemma) / 로컬 티어(개발 PC의 kind + Gemini 무료 등급, GPU 없음) — 같은 코드·같은 차트, 설정만 다르다 | 회사 GPU를 못 쓰게 돼도 로컬 티어로 계속 개발하고, CI와 저장소를 클론한 사람은 로컬 티어로 돌린다 |
-| 진행 순서 | 얇은 끝-끝 경로 먼저(round01), 이후 라운드마다 두께를 늘림 | 라운드마다 시연할 결과가 나오고 평가 기준이 일찍 생긴다 |
+| 온프레미스 LLM | 회사 GPU 서버의 vLLM — Gemma 4 26B A4B(MoE, 전체 25.2B·활성 3.8B, 도구 호출 지원, 문맥 32K) + 임베딩 모델(round02) | 요청 수 제한 없이 많이 부르는 일(조사 반복·평가)을 맡긴다 |
+| 실행 티어 | GPU 티어(회사 GPU 서버의 k3s, 역할별 모델 기본값은 triage만 Gemma·나머지 Gemini) / 로컬 티어(개발 PC의 kind, GPU 없음, 모든 역할이 Gemini 무료 등급) — 티어는 클러스터와 역할별 모델 설정의 기본값 묶음이고, 같은 코드·같은 차트에 설정만 다르다 | 회사 GPU를 못 쓰게 돼도 로컬 티어로 계속 개발하고, CI와 저장소를 클론한 사람은 로컬 티어로 돌린다 |
+| 진행 순서 | 얇은 끝-끝 경로 먼저(round01a·01b), 이후 라운드마다 두께를 늘림 | 라운드마다 시연할 결과가 나오고 평가 기준이 일찍 생긴다 |
 | 교본 | 이전 프로젝트와 같이 전체 코드 수록 + 면접 Q&A, 그리고 처음 나온 개념을 기초부터 정리하는 「개념 입문」(2026-11-10 추가) | 사용자 선택 — 학습 프로젝트라 모르던 분야도 익힌다 |
 | 저장소 | https://github.com/Jeonghyun-An/hybrid-ops-agent (개인 계정, public) | 포트폴리오. 비밀값 커밋은 gitleaks로 막는다 |
 
@@ -49,11 +49,11 @@
 
 1. **상태가 있는 것(DB·모델·관측)은 상시 켜진 온프레미스에 둔다.** GKE 노드를 꺼도 데이터가 남는다.
 2. **상태 없는 앱은 Helm 차트 하나로 두 클러스터에 같이 배포한다.** Argo CD(온프레미스에서 실행) ApplicationSet이 k3s와 GKE 양쪽을 대상으로 잡는다. GKE 노드가 꺼져 있으면 온프레미스 쪽 에이전트가 응답한다.
-3. **클러스터 간 연결은 round03에서 정한다.** 기본안은 Tailscale 쿠버네티스 오퍼레이터로 회사 GPU 서버의 vLLM·Neo4j·Postgres를 GKE에서 사설 주소로 부르는 것이다. 회사 서버에 Tailscale을 둘 수 있는지는 회사 망 정책을 확인해 round03 전에 정하고(§10), 묶지 못하면 GKE 쪽 에이전트는 Gemini만 쓰고 독립으로 돈다. 어느 쪽이든 인바운드 포트는 열지 않는다.
+3. **클러스터 간 연결은 round03 착수 전에 정한다.** 기본안은 Tailscale 쿠버네티스 오퍼레이터로 회사 GPU 서버의 vLLM·Neo4j·Postgres를 GKE에서 사설 주소로 부르는 것이다. 회사 서버에 Tailscale을 둘 수 있는지는 회사 망 정책을 확인해 정하고(§10), 묶지 못하면 GKE 쪽 에이전트는 Gemini만 쓰고 독립으로 돈다. 어느 쪽이든 인바운드 포트는 열지 않는다.
 4. **비밀값**: GKE는 Workload Identity Federation으로 키 없이 Gemini(Vertex AI)·Secret Manager에 접근한다. 온프레미스는 SOPS(age)로 암호화한 시크릿을 git에 둔다. 로컬 티어의 Gemini 키는 커밋하지 않는 `.env`에 둔다.
 5. **Langfuse는 Cloud 무료 등급부터 쓴다.** 셀프호스팅 v3는 ClickHouse까지 필요해 회사 GPU 서버에 다른 시스템과 같이 올리기 무겁다. 계측은 OpenTelemetry로 해 두어 백엔드를 바꿀 수 있게 한다.
 
-**실행 티어**: GPU 티어(회사 GPU 서버의 k3s + vLLM의 Gemma, 32K 문맥)와 로컬 티어(개발 PC의 kind + Gemini 무료 등급, GPU 없음)는 같은 코드와 같은 Helm 차트를 쓰고 설정만 다르다. CI는 회사망에 닿지 않으므로 항상 로컬 티어(가짜 LLM)로 돈다. 도구 출력 크기와 문맥 예산은 가장 작은 문맥(32K)에 맞춘다.
+**실행 티어**: GPU 티어(회사 GPU 서버의 k3s, 온프레미스 LLM은 vLLM의 Gemma — 32K 문맥)와 로컬 티어(개발 PC의 kind, GPU 없음, LLM은 Gemini 무료 등급)는 같은 코드와 같은 Helm 차트를 쓰고 설정만 다르다. 「로컬」은 이 티어 이름에만 쓰고, 회사 GPU의 모델은 「온프레미스 LLM(Gemma)」이라 부른다. CI는 회사망에 닿지 않으므로 항상 로컬 티어(가짜 LLM)로 돈다. 도구 출력 크기와 문맥 예산은 가장 작은 문맥(32K)에 맞춘다.
 
 **회사 자원 경계**: 회사 GPU 서버는 연산 자원으로만 쓴다. 그 위에는 이 저장소의 코드, 공개 가중치 모델, 데모 데이터, 직접 쓴 문서와 공개 문서만 올린다. 회사 저장소의 코드·회사 데이터·회사가 학습시킨 모델은 쓰지 않고, 서버 주소·호스트명·계정·사내 네트워크 정보는 커밋하지 않는다(`CLAUDE.md` §2).
 
@@ -67,7 +67,7 @@
 
 ```
 경보(Alertmanager 웹훅)·사용자 질문
-  → triage            [로컬 Gemma]       경보 분류, 대상 클러스터·네임스페이스·심각도
+  → triage            [온프레미스 Gemma]  경보 분류, 대상 클러스터·네임스페이스·심각도
   → supervisor        [클라우드 Gemini]  조사 계획, 서브에이전트 배정
       ├─ k8s 조사관    MCP k8s-read   pod·events·describe·logs
       ├─ 지표 분석관   MCP observability  PromQL, Loki 로그 검색
@@ -82,7 +82,7 @@
 
 - **상태**는 Pydantic 모델로 타입을 고정한다(incident, evidence 목록, hypotheses, plan, approval).
 - **체크포인트**는 온프레미스 Postgres(`langgraph-checkpoint-postgres`의 PostgresSaver)에 둔다. GKE에서 시작해 승인 대기 중이던 조사를 GKE 노드가 꺼진 뒤 k3s 쪽에서 이어 갈 수 있다(클러스터 간 연결이 될 때 — §3 배치 원칙 3).
-- **모델 분업**: 기본은 triage만 로컬 모델, 계획·진단·추출은 클라우드 Gemini. GPU 티어의 Gemma가 처음 계획(3060의 8B)보다 커졌으므로 round01b부터 같은 시나리오를 두 모델로 돌려 비교하고, 분업 비율은 round07 라우팅 실험에서 정한다. 두 쪽 다 OpenAI 호환 API라 같은 클라이언트 코드로 부른다.
+- **모델 분업**: GPU 티어의 기본은 triage만 온프레미스 Gemma, 계획·진단·추출은 클라우드 Gemini(로컬 티어는 모두 Gemini). Gemma가 처음 계획보다 커졌으므로 round01b부터 같은 시나리오를 두 모델로 돌려 비교하고, 분업 비율은 round07 라우팅 실험에서 정한다. 두 쪽 다 OpenAI 호환 API라 같은 클라이언트 코드로 부른다.
 - **MCP 서버**는 공식 Python SDK(FastMCP)로 직접 만든다. SDK 2.x는 FastMCP를 MCPServer로 바꿨지만 에이전트 쪽 `langchain-mcp-adapters`가 아직 1.x만 지원해 워크스페이스 전체를 `mcp>=1.30,<2`로 고정한다(round01a).
   - `k8s-read`: 클러스터마다 하나. 그 클러스터의 읽기 전용 ServiceAccount만 갖는다.
   - `k8s-write`: 데모 네임스페이스에만 권한이 있는 별도 ServiceAccount. 도구는 rollout restart·rollout undo·범위 안 scale뿐이다.
@@ -115,7 +115,7 @@
 ## 6. 관측·평가
 
 - **인프라 관측**: kube-prometheus-stack(Prometheus·Alertmanager·Grafana) + Loki + Tempo, 회사 GPU 서버.
-- **에이전트 추적**: OpenTelemetry 계측 → Langfuse. 조사 1건 = 트레이스 1개. 노드별 지연·토큰·비용을 로컬/클라우드로 나눠 본다.
+- **에이전트 추적**: OpenTelemetry 계측 → Langfuse. 조사 1건 = 트레이스 1개. 노드별 지연·토큰·비용을 온프레미스/클라우드 모델로 나눠 본다.
 - **시나리오 평가**: `eval/scenarios/<이름>.yaml` 하나가 다음을 담는다.
   - 장애 주입 절차, 기대 원인 라벨, 기대 조치
   - 러너가 주입 → 경보(또는 직접 질문) → 에이전트 실행 → 채점까지 자동으로 돈다.
@@ -129,13 +129,13 @@
 |---|---|---|
 | round00 | 저장소 골격 + 라운드 방식 이식(§8), uv 워크스페이스·ruff·pytest, GitHub Actions CI, gitleaks, devcontainer | main·dev 브랜치, 운영 문서·템플릿·스킬·리뷰 에이전트가 있고 CI green |
 | round01a | 로컬 티어 기반: 개발 PC kind + 데모 앱 + 장애 2종 + MCP `k8s-read`(읽기 전용 RBAC), kind 통합 테스트 CI, GCP·두 티어 문서 전환 | 장애 2종의 단서를 MCP 도구로 확인하는 통합 테스트가 CI에서 green |
-| round01b | 끝-끝 경로: 단일 LangGraph 에이전트 + LLM 두 티어(Gemini 무료 등급·회사 GPU의 Gemma), 평가 러너 v0 | 시나리오 2종을 러너로 돌려 원인 라벨을 맞힘, 두 모델의 정확도·속도·도구 호출 실패율 비교 |
-| round02 | 온프레미스(GPU 티어): 회사 GPU 서버의 k3s·GPU Operator·vLLM(기존 Gemma 인스턴스를 k3s 관리로 옮김)·임베딩 모델, Argo CD, Helm 차트(로컬 티어는 같은 차트를 로컬 값으로), SOPS | git push만으로 회사 GPU 서버의 k3s에 에이전트·데모 앱이 배포되고, 로컬 LLM triage가 동작 |
-| round03 | 클라우드: Terraform(GKE·Gemini(Vertex AI)·Secret Manager·Workload Identity Federation·예산 알림), ApplicationSet으로 GKE 배포, 이미지는 GHCR, 야간 GKE 노드 0 축소, 클러스터 간 연결(§10 결정에 따름) | GKE 노드를 켜면 같은 차트가 자동 배포되고, GKE의 에이전트가 Gemini로 조사한다(연결이 되면 회사 서버의 vLLM·Neo4j도 부른다) |
+| round01b | 끝-끝 경로: 단일 LangGraph 에이전트 + LLM 두 종(Gemini 무료 등급·회사 GPU의 Gemma, 클러스터는 로컬 티어 kind), 평가 러너 v0 | 시나리오 2종을 러너로 돌려 원인 라벨을 맞힘, 두 모델의 정확도·속도·도구 호출 실패율 비교 |
+| round02 | 온프레미스(GPU 티어): 회사 GPU 서버의 k3s·GPU Operator·vLLM(기존 Gemma 인스턴스를 k3s 관리로 옮김)·임베딩 모델, Argo CD, Helm 차트(로컬 티어는 같은 차트를 로컬 값으로), SOPS | git push만으로 회사 GPU 서버의 k3s에 에이전트·데모 앱이 배포되고, 온프레미스 LLM(Gemma) triage가 동작 |
+| round03 | 클라우드: Terraform(GKE·Gemini(Vertex AI)·Secret Manager·Workload Identity Federation·예산 알림), ApplicationSet으로 GKE 배포, 이미지는 GHCR, 야간 GKE 노드 0 축소, 클러스터 간 연결(§10 결정에 따름) | GKE 노드를 켜면 같은 차트가 자동 배포되고, GKE의 에이전트가 Gemini로 조사한다(연결이 되면 회사 서버의 vLLM도 부른다) |
 | round04 | 관측: Prometheus·Loki·Tempo, Alertmanager → 에이전트 웹훅, Langfuse | 장애 주입만으로 경보 → 조사 시작까지 자동, 트레이스가 Langfuse에 남음 |
 | round05 | GraphRAG: Neo4j 두 층, 추출·검색, 벡터 RAG와 비교 | 비교 수치가 완료노트에 있음 |
 | round06 | 멀티에이전트 + 사람 승인: supervisor·서브에이전트, PostgresSaver, interrupt, MCP `k8s-write`, verify, postmortem 기록, 웹 UI | 웹에서 승인 → 조치 → 회복 확인 → 그래프 기록까지 한 번에 돎 |
-| round07 | 평가 고도화 + LLM 라우팅: 시나리오 10종 이상(프롬프트 인젝션 1종 포함), Chaos Mesh, 로컬/클라우드 분업 비율 실험 | 라우팅 정책별 정확도·비용 표가 완료노트에 있음 |
+| round07 | 평가 고도화 + LLM 라우팅: 시나리오 10종 이상(프롬프트 인젝션 1종 포함), Chaos Mesh, 온프레미스/클라우드 모델 분업 비율 실험 | 라우팅 정책별 정확도·비용 표가 완료노트에 있음 |
 
 라운드 안에서 성격이 다른 덩어리가 생기면 `round02a`·`round02b`처럼 접미로 나눈다. 접미 라운드도 spec·plan·완료노트·교본을 따로 둔다.
 
@@ -152,7 +152,7 @@ hybrid-ops-agent/
 ├─ web/              Nuxt UI (round06)
 ├─ deploy/           kind/ · helm/ · argocd/
 ├─ infra/            terraform/gcp/ · onprem/(k3s 부트스트랩)
-├─ docs/             specs · superpowers/{specs,plans} · roadmap · guides · standards · ops
+├─ docs/             superpowers/{specs,plans} · roadmap · guides · standards · ops
 ├─ scripts/          재실행되는 운영 도구
 ├─ research/         1회성 실험(스크립트 + 산출물)
 └─ .claude/          skills/round-finish · agents/code-reviewer
@@ -174,7 +174,7 @@ Python 패키지(`agent`·`mcp_servers`·`graphrag`·`demo_app`·`eval`)는 uv �
 - 배포가 GitOps라 "main = 배포 기준"이 문자 그대로가 된다. Argo CD가 `main`을 본다. `dev`는 CI(kind 통합 테스트)로만 검증한다.
 - `GIT_WORKFLOW.md`의 개발 환경 절은 kind / k3s / GKE 기준으로 새로 쓴다(docker compose·Portainer 내용은 가져오지 않는다).
 - code-reviewer 에이전트에 인프라 점검을 더한다: Terraform plan 변화, RBAC 최소 권한, 비밀값 커밋 여부, 이미지 태그 고정.
-- CI 게이트: ruff, pytest, gitleaks(round00), `helm lint`·kubeconform(round02), `terraform fmt -check`·`terraform validate`(round03). 검사 대상 파일이 처음 생기는 라운드에 그 게이트를 더한다 — 대상 없는 검사는 아무것도 증명하지 못한다.
+- CI 게이트: ruff, pytest, gitleaks(round00), shellcheck·kind 통합 테스트(round01a), `helm lint`·kubeconform(round02), `terraform fmt -check`·`terraform validate`(round03). 검사 대상 파일이 처음 생기는 라운드에 그 게이트를 더한다 — 대상 없는 검사는 아무것도 증명하지 못한다.
 - 개발 PC가 바뀌어도 되도록 개발 환경은 uv + devcontainer로 재현한다.
 - 교본에 「개념 입문」 절을 더한다 — 학습 프로젝트라 라운드마다 처음 나온 개념을 기초부터 정리한다(2026-11-10 사용자 요청).
 
@@ -206,7 +206,8 @@ Python 패키지(`agent`·`mcp_servers`·`graphrag`·`demo_app`·`eval`)는 uv �
 | Gemini 모델 이름(무료 등급) | round01b | 무료 등급 요청 한도, 도구 호출 품질 |
 | 조사 1건의 문맥·토큰 예산 | round01b | GPU 티어 32K 문맥, 도구 출력 상한(응답당 12,000자) |
 | 임베딩 모델·서빙 방식(vLLM / TEI) | round02 | 회사 GPU 서버에서 실측한 메모리·지연 |
-| GKE 운영 방식(Standard 노드 0 축소 / Autopilot) | round03 | 체험 크레딧 소모, 정지 방식 |
+| GKE 운영 방식(Standard 노드 0 축소 / Autopilot) | round03 | 체험 크레딧 소모, 정지 방식. 노드를 0으로 줄여도 클러스터 관리 수수료·LB·디스크·고정 IP는 남는다. Autopilot을 고르면 「노드 0」을 전제한 문구(`CLAUDE.md` §4·완료노트 템플릿·round-finish)를 사용자 승인을 받아 고친다 |
+| 온프레미스 Argo CD의 GKE 등록 방식 — 회사망에서 GKE API로 나가는 연결, 자격 증명(서비스 계정 키 / 외부 OIDC Workload Identity Federation / GKE 쪽 별도 배포) | round03 착수 전 | 회사 망 정책, 키를 두지 않는 원칙. 안 되면 GKE에는 GitHub Actions나 GKE 쪽 Argo CD로 배포한다 |
 | GKE ↔ 회사 GPU 서버 연결 가능 여부(Tailscale 등) | round03 착수 전 | 회사 망 정책 — 안 되면 GKE 쪽은 Gemini만 쓰고 독립으로 돈다 |
 | GCP 예산 알림 금액 | round03 | 사용자 결정 |
 | 회사 서버 RAM에 따른 Langfuse 셀프호스팅 이전 여부 | round04 | 관측 스택을 올린 뒤 남는 메모리 |
@@ -218,7 +219,10 @@ Python 패키지(`agent`·`mcp_servers`·`graphrag`·`demo_app`·`eval`)는 uv �
 | 위험 | 대응 |
 |---|---|
 | 회사 GPU 서버에서 다른 시스템과 GPU·메모리를 나눠 쓴다 | 모든 컨테이너에 requests/limits를 두고 round02에서 실측해 한도를 정한다. 서버의 기존 시스템은 사용자 승인 없이 건드리지 않는다 |
-| 회사 서버 접근이 끊기면 GPU 티어가 멈춘다 | 로컬 티어로 계속 개발한다. Postgres·Neo4j는 주기 백업 스크립트를 둔다(round02) |
+| 회사 서버 접근이 끊기면 GPU 티어가 멈춘다 | 로컬 티어로 계속 개발한다. 주기 백업 스크립트를 둔다 — Postgres(round02)·Neo4j(round05) |
+| GCP 무료 체험 90일이 GKE를 쓰는 라운드(round03~07)보다 먼저 끝난다 | 체험은 round03 직전에 시작하고, 끝나면 GKE 작업을 그때 범위로 줄이거나 유료 전환을 사용자에게 묻는다 |
+| round03에 결제 계정을 AI Studio 키가 있는 프로젝트에 연결하면 그 Gemini 키가 유료 등급이 된다 | 결제 연결은 사용자 승인 대상(`CLAUDE.md` §4)이고, 무료 키와 결제 프로젝트를 분리한다 |
+| 회사 서버에 k3s를 올리며 런타임·iptables가 바뀌고, k3s 기본 대역(10.42/16·10.43/16)이 사내 대역과 겹칠 수 있다 | round02 spec에서 사내 대역을 확인해 `--cluster-cidr`·`--service-cidr`를 정하고, 설치는 사용자 승인 뒤에 한다 |
 | Gemma 4의 도구 호출이 정해진 형식을 벗어나 일반 텍스트로 나온다 | 평가 러너에 도구 호출 실패율을 넣고, 기준 미달이면 그 역할은 Gemini로 돌린다 |
 | GKE 노드를 끄지 않아 체험 크레딧이 줄어든다 | 야간 자동 축소 + 예산 알림 |
 | public 저장소에 비밀값·회사 정보가 노출된다 | gitleaks pre-commit + CI, 커밋 전 직접 확인과 code-reviewer 점검(내부 주소는 gitleaks가 못 잡는다), SOPS 암호화, Workload Identity Federation으로 키 자체를 줄임 |

@@ -18,10 +18,10 @@
 
 | 위치 | 켜짐 | 역할 |
 |---|---|---|
-| 회사 GPU 서버 (k3s) — GPU 티어 | 상시 | 로컬 LLM(vLLM의 Gemma), Neo4j, Postgres, 관측 스택, Argo CD, 데모 앱·에이전트·MCP 서버 |
+| 회사 GPU 서버 (k3s) — GPU 티어 | 상시 | 온프레미스 LLM(vLLM의 Gemma), Neo4j, Postgres, 관측 스택, Argo CD, 데모 앱·에이전트·MCP 서버 |
 | 개발 PC (kind) — 로컬 티어 | 개발할 때 | 데모 앱·MCP 서버·에이전트(Gemini 무료 등급), 통합 테스트 — GPU 없이 돈다 |
 | GCP GKE | 작업할 때만 | 상태 없는 앱(에이전트 API·MCP 서버·웹 UI), 데모 앱 사본 |
-| Gemini | 무료 등급(round01~02) | 계획·진단·그래프 추출 |
+| Gemini | 무료 등급 키(round01~02) → Vertex AI(round03~) | 계획·진단·그래프 추출 |
 | Langfuse Cloud | 상시(SaaS) | 에이전트 트레이스·평가 데이터셋 |
 
 자세한 설계와 라운드 로드맵: [전체 설계 spec](docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md) · 진행 상황: [docs/roadmap/00_status.md](docs/roadmap/00_status.md)
@@ -37,7 +37,7 @@ uv run pytest
 uv run hoa --version
 ```
 
-로컬 티어 개발 클러스터에는 Docker Desktop과 [kind](https://kind.sigs.k8s.io/) v0.33.0이 필요하다(Windows는 Git Bash에서 실행한다).
+로컬 티어 개발 클러스터에는 Docker Desktop, [kind](https://kind.sigs.k8s.io/) v0.33.0, kubectl(Docker Desktop에 들어 있다)이 필요하다(Windows는 Git Bash에서 실행한다).
 
 ```bash
 bash scripts/dev-cluster.sh up
