@@ -1,9 +1,15 @@
 [project]
 name = "hoa-agent"
-version = "0.0.0"
+version = "0.1.0"
 description = "운영 에이전트(LangGraph)와 hoa 명령줄 도구"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "langchain-mcp-adapters>=0.3.2",
+    "langchain-openai>=1.8",
+    "langgraph>=1.2.22",
+    "openai>=3.51",
+    "pydantic>=2.14",
+]
 
 [project.scripts]
 hoa = "hoa_agent.cli:main"
