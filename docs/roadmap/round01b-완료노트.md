@@ -106,4 +106,4 @@ plan: `docs/superpowers/plans/2026-11-16-round01b-agent-llm-eval.md`
 - [x] 문서 갱신(교본·00_status·실제로 돌려 보며 새로 겪은 함정(개발 환경 포함)을 `docs/ops/recurring-gotchas.md`에 추가)
 - [x] 클라우드 리소스 정지 확인 — 해당 없음(GKE를 켜지 않은 라운드)
 - [x] `dev` 머지 승인 — 머지 커밋 `ad209d4`, dev CI 43828081352 세 잡 success
-- [ ] `dev→main` 머지 + push 완료
+- [x] `dev→main` 머지 + push 완료 — main 머지 커밋 `746fe5e`, main CI 43828890323 세 잡 success
