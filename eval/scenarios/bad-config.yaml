@@ -1,0 +1,13 @@
+# 장애 bad-config — inventory의 HOA_DEMO_PORT를 숫자가 아닌 값으로 바꾼다. 새 파드가 시작하자마자 죽기를 반복한다.
+name: bad-config
+fault:
+  patch: deploy/kind/faults/bad-config.yaml
+  namespace: demo
+  deployment: inventory
+wait:
+  min_restarts: 1
+  timeout_seconds: 120
+alert: "KubePodCrashLooping — namespace=demo deployment=inventory: a pod keeps restarting"
+expected:
+  cause_label: bad_config
+  target: demo/inventory

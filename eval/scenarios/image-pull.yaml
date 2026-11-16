@@ -1,0 +1,14 @@
+# 장애 image-pull — orders 이미지를 없는 태그로 바꾼다. 이전 파드가 살아 있어 서비스는 되고 롤아웃만 멈춘다.
+name: image-pull
+fault:
+  patch: deploy/kind/faults/image-pull.yaml
+  namespace: demo
+  deployment: orders
+wait:
+  waiting_reasons: [ErrImagePull, ImagePullBackOff]
+  timeout_seconds: 120
+# round04 Alertmanager 경보를 흉내 낸다 — 대상은 알려 주고 원인은 알려 주지 않는다
+alert: "KubeDeploymentRolloutStuck — namespace=demo deployment=orders: rollout has not progressed"
+expected:
+  cause_label: image_pull_error
+  target: demo/orders
