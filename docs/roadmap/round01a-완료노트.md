@@ -64,5 +64,5 @@ plan: `docs/superpowers/plans/2026-11-11-round01a-kind-mcp-read.md`
 - [x] 수동 스모크 확인 — 호출 흐름, 장애 두 가지와 복구, 진행 기한을 넘긴 뒤 `reset`(종료 코드 0), 잘못된 장애 이름(종료 코드 2)
 - [x] 문서 갱신(교본·00_status·실제로 돌려 보며 새로 겪은 함정(개발 환경 포함)을 `docs/ops/recurring-gotchas.md`에 추가)
 - [x] 클라우드 리소스 정지 확인(GKE 노드를 켠 라운드만 — 확인 명령은 `/round-finish` 5단계. 켜지 않은 라운드는 「해당 없음」을 덧붙이고 체크) — 해당 없음
-- [ ] `dev` 머지 승인
+- [x] `dev` 머지 승인 — 머지 커밋 `215d288`(2026-11-16 승인), 실행 43802338771 세 잡 success
 - [ ] `dev→main` 머지 + push 완료
