@@ -51,7 +51,7 @@ LangGraph `StateGraph`를 직접 짠다(사용자 결정 2026-11-16 — 기성 `
 
 - **상태**: 경보, 메시지 목록(LangGraph `add_messages`), 도구 호출 수, 문맥 크기(마지막 요청의 입력 토큰), 멈춘 이유(`answered`·`tool_budget`·`token_budget`), 진단.
 - **investigate**: `ChatOpenAI.bind_tools(<MCP 도구>)`를 부른다. 응답의 `tool_calls`가 있으면 tools로, 없으면 diagnose로 간다. 인자 JSON이 깨진 호출(`invalid_tool_calls`)에는 그 자리에서 오류 답을 붙이고, 그것뿐이면 investigate로 돌아가 모델이 고쳐 부르게 한다(깨진 호출도 도구 호출 수에 센다).
-- **tools**: LangGraph `ToolNode`. 도구 오류(MCP `isError` → 어댑터가 도구 예외로 올림)는 그래프를 멈추지 않고 오류 문장을 도구 메시지로 돌려줘, 모델이 읽고 고치게 한다.
+- **tools**: LangGraph `ToolNode`. 도구 오류(MCP `isError`는 어댑터 도구가 스스로 — `load_mcp_tools`의 기본값 `handle_tool_errors=True` —, 그 밖의 예외는 `ToolNode`가 바꾼다)는 그래프를 멈추지 않고 오류 문장을 도구 메시지로 돌려줘, 모델이 읽고 고치게 한다.
 - **예산**(Gemma 32K 기준): 도구 호출 최대 6번, 마지막 요청의 입력 토큰이 26,000에 이르면 끊는다(응답의 사용량 메타데이터로 센다 — 매 요청이 대화 전체를 다시 보내므로 누적 합이 아니라 마지막 값이 그때의 문맥 크기다). 넘으면 그때까지 모은 단서로 바로 diagnose한다. 근거: 시스템 프롬프트·도구 정의 약 3K + 도구 6번 × 최대 3K ≈ 21K, 나머지가 진단과 답변의 여유다.
 - **diagnose**: 같은 모델의 구조화 출력(`with_structured_output`)으로 `Diagnosis`를 받는다. 방식은 JSON 스키마(`method="json_schema"`)다 — 두 엔드포인트 모두에서 확인했다(plan 작성 중, 2026-11-16). 스키마를 어기면 기본값으로 메우지 않고 실패로 드러낸다(코딩 표준).
 - **`Diagnosis`**(Pydantic):
