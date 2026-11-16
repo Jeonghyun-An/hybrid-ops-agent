@@ -5,6 +5,7 @@ from kubernetes_asyncio.client import (
     CoreV1Event,
     V1Container,
     V1ContainerStateTerminated,
+    V1ContainerStatus,
     V1Deployment,
     V1EnvFromSource,
     V1EnvVar,
@@ -47,13 +48,21 @@ def safe_text(text: str, limit: int) -> str:
     return clip(redact(text), limit)
 
 
-def latest_termination(pod: V1Pod) -> V1ContainerStateTerminated | None:
-    statuses = (pod.status.init_container_statuses or []) + (pod.status.container_statuses or [])
+def terminations(statuses: list[V1ContainerStatus]) -> list[V1ContainerStateTerminated]:
     current = [s.state.terminated for s in statuses if s.state and s.state.terminated]
     previous = [
         s.last_state.terminated for s in statuses if s.last_state and s.last_state.terminated
     ]
-    return next(iter(current + previous), None)
+    return current + previous
+
+
+def latest_termination(pod: V1Pod) -> V1ContainerStateTerminated | None:
+    """App containers first; an init container counts only when it failed, because a
+    completed init container (exit 0) would otherwise hide the app container's crash."""
+    app = terminations(pod.status.container_statuses or [])
+    init = terminations(pod.status.init_container_statuses or [])
+    failed_init = [t for t in init if t.exit_code != 0]
+    return next(iter(app + failed_init), None)
 
 
 def pod_summary(pod: V1Pod, now: datetime) -> PodSummary:

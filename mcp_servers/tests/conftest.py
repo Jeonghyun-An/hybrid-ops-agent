@@ -82,6 +82,7 @@ def build_pod(
     terminated: tuple[str, int] | None = None,
     last_terminated: tuple[str, int] | None = None,
     init_waiting: tuple[str, str] | None = None,
+    init_terminated: tuple[str, int] | None = None,
     reason: str | None = None,
     deleting: bool = False,
     age_seconds: int = 90,
@@ -95,14 +96,14 @@ def build_pod(
         last_terminated=last_terminated,
     )
     init = []
-    if init_waiting:
+    if init_waiting or init_terminated:
         init = [
             container_status(
                 "init",
                 ready=False,
                 restarts=0,
                 waiting=init_waiting,
-                terminated=None,
+                terminated=init_terminated,
                 last_terminated=None,
             )
         ]

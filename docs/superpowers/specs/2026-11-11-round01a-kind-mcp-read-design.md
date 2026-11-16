@@ -1,6 +1,6 @@
 # round01a — kind 개발 클러스터·데모 앱·MCP `k8s-read` 설계
 
-> 상태: 확정(2026-11-11, 사용자 승인). 구현 중 정적 리뷰 반영으로 §5를 고쳤다.
+> 상태: 확정(2026-11-11, 사용자 승인). 구현 중 정적 리뷰 반영으로 §5·§6을 코드에 맞춰 고쳤다.
 > 라운드: round01a. round01을 성격에 따라 둘로 나눈 앞쪽이다 — 01a는 클러스터·데모 앱·MCP 읽기 도구(LLM 없음), 01b는 에이전트·LLM 두 종(Gemini·Gemma)·평가 러너 v0.
 > 전체 설계: `docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md` — 이 라운드에서 §7.3대로 고친다.
 > 브랜치: `feat/round01a-kind-mcp-read`
@@ -84,7 +84,7 @@
   - `up` — 클러스터 `hoa`가 없으면 만든다 → 데모 이미지를 빌드해 `kind load`로 넣는다 → 매니페스트를 적용하고 rollout을 기다린다 → MCP용 kubeconfig를 쓴다(§5.5). 여러 번 실행해도 결과가 같다.
   - `down` — 클러스터를 지운다.
   - `fault <image-pull|bad-config>` — 장애를 심는다(§5.3).
-  - `reset` — 기준 매니페스트를 다시 적용해 장애를 걷고 rollout을 기다린다.
+  - `reset` — 기준 매니페스트를 다시 적용하고 `rollout restart`로 새 ReplicaSet을 만든 뒤 rollout을 기다린다(진행 기한을 넘긴 장애도 복구된다). 장애 패치는 기준 매니페스트에 이미 있는 필드의 값만 바꾼다 — client-side apply는 패치가 새로 더한 필드를 지우지 않는다.
   - `mcp-kubeconfig` — 읽기 전용 ServiceAccount의 토큰을 새로 받아 kubeconfig를 다시 쓴다.
 - 모든 kubectl 호출은 `--context kind-hoa`를 명시한다 — 개발 PC에 회사 서버 컨텍스트가 같이 있어도 다른 클러스터를 건드리지 않는다.
 - 버전 고정: kind v0.33.0, 노드 이미지는 그 릴리스의 이미지를 다이제스트까지 고정한다(정확한 값은 plan에서 릴리스 노트로 확인한다). 스크립트는 시작할 때 `kind version`이 고정 버전인지 확인한다. devcontainer의 kubectl도 노드와 같은 마이너로 고정한다.
@@ -130,7 +130,7 @@
 
 | 도구 | 입력 | 출력 요지 |
 |---|---|---|
-| `list_pods` | `namespace` | 파드마다 이름·phase·준비된 컨테이너 수·재시작 수·대기 사유(`ImagePullBackOff` 등)·마지막 종료 사유·나이 |
+| `list_pods` | `namespace` | 파드마다 이름·phase·준비된 컨테이너 수·재시작 수·파드 사유(`Evicted` 등)·삭제 중 여부·대기 사유(`ImagePullBackOff` 등)·최근 종료 사유와 종료 코드·나이. 손볼 파드가 앞에 온다 |
 | `get_events` | `namespace`, `object_name`(선택), `limit`(기본 20, 최대 50) | 최신순 이벤트 — 유형·사유·대상·메시지·횟수·마지막 시각 |
 | `describe_deployment` | `namespace`, `name` | 원하는·갱신된·준비된·가용 복제 수, conditions, 컨테이너별 이미지·환경변수·resources, ReplicaSet별 리비전·이미지·복제 수 |
 | `get_pod_logs` | `namespace`, `pod`, `container`(선택), `previous`(기본 false), `tail_lines`(기본 100, 최대 200) | 로그 줄 목록(최신 줄을 남긴다) |
@@ -158,9 +158,9 @@
 - **통합 테스트**(`integration` 마커, kind 필요):
   - 마커를 루트 `pyproject.toml`에 등록하고 기본 실행에서 뺀다(`addopts`에 `-m "not integration"`). `uv run pytest -m integration`으로 따로 돌린다.
   - 정상: 세 Deployment가 Available이고, API 서버의 서비스 프록시로 부른 gateway `/api/orders/1`이 200이다.
-  - 장애 2종: `bash scripts/dev-cluster.sh fault <이름>`으로 주입 → 증상이 나타날 때까지 기다림(최대 120초 폴링) → MCP 클라이언트 세션으로 도구를 불러 §5.3의 단서를 확인 → `reset`으로 복구.
+  - 장애 2종: `deploy/kind/faults/`의 패치를 kubectl로 주입 → 증상이 나타날 때까지 기다림(최대 120초 폴링) → MCP 클라이언트 세션으로 도구를 불러 §5.3의 단서를 확인 → `reset`과 같은 방법(apply + rollout restart)으로 복구. 테스트가 Windows에서 `bash`를 부르지 않게 kubectl을 직접 쓰고, 스크립트의 `fault`·`reset`은 CI의 별도 단계가 돌린다.
   - 권한: MCP 서버로 `kube-system`을 부르면 거부된다. 읽기 전용 ServiceAccount로는 `demo`의 Secret 조회가 403이다.
-  - MCP 연결: 대부분은 SDK의 메모리 전송(서버와 클라이언트를 한 프로세스에서 연결)으로 부르고, 한 건은 실제 콘솔 스크립트를 stdio로 띄워 도구 목록을 받는다 — 진입점까지 확인한다.
+  - MCP 연결: SDK의 메모리 전송(서버와 클라이언트를 한 프로세스에서 연결)으로 부른다. 실제 콘솔 스크립트를 stdio로 띄워 도구 목록을 받는 진입점 확인은 클러스터가 필요 없어 단위 테스트(`test_entrypoint.py`)로 둔다.
   - 장애 주입·상태 대기는 관리자 컨텍스트로 하고, 도구 호출은 반드시 읽기 전용 kubeconfig로 한다. 테스트 코드의 관리자 클라이언트는 코딩 표준 「외부 호출 격리」(제품 코드 규칙)의 대상이 아니다.
 - **CI**(`.github/workflows/ci.yml`):
   - 린트·테스트 잡: 기존 단계 + shellcheck(`uv run pre-commit run shellcheck --all-files` — pre-commit과 같은 버전을 쓴다).

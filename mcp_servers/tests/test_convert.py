@@ -69,6 +69,33 @@ def test_first_crash_shows_before_any_restart(make_pod: MakePod, now: datetime) 
     assert summary.last_exit_code == 1
 
 
+def test_completed_init_container_does_not_hide_the_app_crash(
+    make_pod: MakePod, now: datetime
+) -> None:
+    pod = make_pod(
+        ready=False,
+        restarts=2,
+        waiting=("CrashLoopBackOff", "back-off restarting failed container"),
+        last_terminated=("Error", 1),
+        init_terminated=("Completed", 0),
+    )
+    summary = pod_summary(pod, now)
+    assert summary.last_terminated_reason == "Error"
+    assert summary.last_exit_code == 1
+
+
+def test_failed_init_container_is_reported(make_pod: MakePod, now: datetime) -> None:
+    pod = make_pod(
+        phase="Pending",
+        ready=False,
+        waiting=("PodInitializing", "waiting for init"),
+        init_terminated=("Error", 2),
+    )
+    summary = pod_summary(pod, now)
+    assert summary.last_terminated_reason == "Error"
+    assert summary.last_exit_code == 2
+
+
 def test_waiting_init_container_is_reported(make_pod: MakePod, now: datetime) -> None:
     pod = make_pod(phase="Pending", ready=False, init_waiting=("ErrImagePull", "init image"))
     assert pod_summary(pod, now).waiting_reason == "ErrImagePull"
