@@ -2,15 +2,16 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 경보 문장 하나를 받은 에이전트가 MCP `k8s-read` 도구로 kind 클러스터를 조사해 원인 라벨·근거·확신도를 담은 구조화 진단을 내고, 평가 러너가 장애 2종을 Gemini(무료 등급)와 회사 GPU의 Gemma로 각각 3회씩 돌려 자동 채점한 결과표를 남긴다.
+**Goal:** 경보 문장 하나를 받은 에이전트가 MCP `k8s-read` 도구로 kind 클러스터를 조사해 원인 라벨·근거·확신도를 담은 구조화 진단을 내고, 평가 러너가 장애 2종을 기본 모델인 회사 GPU의 Gemma로 3회씩, 비교 기준인 Gemini(무료 등급)로 1회씩 돌려 자동 채점한 결과표를 남긴다.
 
-**Architecture:** `agent` 멤버에 손으로 짠 LangGraph `StateGraph`(investigate → tools ↺ → diagnose)를 둔다. 그래프는 채팅 모델과 도구 목록을 인자로 받아, 단위 테스트는 대본대로 답하는 가짜 채팅 모델로, 통합 테스트는 실제 MCP 서버(stdio) + 가짜 모델로 돈다. LLM은 `llm.py` 한 곳에서 `ChatOpenAI` 하위 클래스로 만든다(Gemini·vLLM 모두 OpenAI 호환). 새 멤버 `eval`은 에이전트를 import하지 않고 `hoa investigate --json`을 하위 프로세스로 부르며, 장애 주입·대기·복구는 관리자 컨텍스트(`kind-hoa`)의 kubectl로 한다.
+**Architecture:** `agent` 멤버에 손으로 짠 LangGraph `StateGraph`(investigate → tools ↺ → diagnose)를 둔다. 그래프는 채팅 모델과 도구 목록을 인자로 받아, 단위 테스트는 대본대로 답하는 가짜 채팅 모델로, 통합 테스트는 실제 MCP 서버(stdio) + 가짜 모델로 돈다. LLM은 `llm.py` 한 곳에서 `ChatOpenAI` 하위 클래스로 만든다(vLLM·Gemini 모두 OpenAI 호환). 기본 모델은 Gemma다. 새 멤버 `eval`은 에이전트를 import하지 않고 `hoa investigate --json`을 하위 프로세스로 부르며, 장애 주입·대기·복구는 관리자 컨텍스트(`kind-hoa`)의 kubectl로 한다.
 
 **Tech Stack:** Python 3.12, uv 0.11 워크스페이스, LangGraph 1.2.22(langgraph-prebuilt 1.1.2 `ToolNode`), langchain-core 1.8.1, langchain-openai 1.8.0, langchain-mcp-adapters 0.3.2(`mcp>=1.30,<2`), openai 3.51, Pydantic 2.14, PyYAML 6, pytest 9 + anyio, httpx `MockTransport`, kind v0.33.0, Gemini OpenAI 호환 API(`gemini-3.5-flash-lite`), vLLM v0.31.0(`gemma4-26b-a4b`, `--tool-call-parser gemma4`).
 
 **spec:** `docs/superpowers/specs/2026-11-16-round01b-agent-llm-eval-design.md`
 
 **plan을 쓰며 확인한 것(2026-11-16) — Task 1에서 spec에 반영한다:**
+- **Gemma 위주**(사용자 결정, plan 검토 중): 기본 모델은 회사 GPU의 Gemma다 — 요청 한도가 없고 클러스터 데이터가 회사 밖으로 나가지 않는다. `hoa investigate`·`hoa-eval run`의 `--model` 기본값이 `gemma`이고, 완료 기준은 「Gemma가 시나리오마다 3회 중 2회 이상」, Gemini는 시나리오마다 1회의 비교 기준이다. 전체 설계의 모델 분업(§2·§3·§4·§5)도 「기본 Gemma, Gemini는 회사망 밖의 대체·평가 비교 기준」으로 바꾼다(Task 16).
 - **Gemini 모델**: `gemini-3.5-flash`는 무료 등급 하루 20회 한도이고(내부적으로 `gemini-3.6-flash`로 센다) 조사 1건에 약 200초가 걸렸다. 조사 1건이 모델을 네댓 번 부르니 하루에 조사 네 번이면 끝난다. `gemini-3.8-flash`·`3.7-flash`는 503·시간 초과, `2.5-flash`는 404였다. `gemini-3.5-flash-lite`는 같은 image-pull 조사를 26초에 맞혔다 — 기본값으로 둔다. 모델별 한도 값은 문서에 없고 AI Studio(로그인)에만 있다.
 - **Gemini 3 도구 호출 서명**: Gemini 3는 도구 호출마다 `extra_content.google.thought_signature`를 붙이고, 도구 결과를 보내는 다음 요청에 그 값이 없으면 400으로 거절한다. `ChatOpenAI`는 이 필드를 버린다. `llm.py`의 `ChatOpenAICompat`이 응답에서 보관했다가 요청에 다시 싣는다(비공개 메서드 `_create_chat_result`·`_get_request_payload` 재정의 — httpx `MockTransport` 테스트가 지킨다).
 - **구조화 출력**: `with_structured_output(Diagnosis, method="json_schema")`가 Gemini·Gemma 두 엔드포인트에서 모두 됐다.
@@ -20,7 +21,7 @@
 - **복구 직후 경합**: `rollout status`가 끝나도 종료 중인 옛 파드가 남아, 다음 회차의 `list_pods`에 섞이고 gateway 프록시 요청이 실패했다. 복구는 종료 중인 파드가 사라질 때까지 기다린다.
 - **인용 확인**: Gemma는 근거를 `waiting_message: "Back-off pulling image "…""`처럼 키 이름과 따옴표를 붙여 인용했다. 채점은 따옴표·백슬래시·공백 차이를 무시한다.
 - **MCP 서버 로그**: FastMCP는 요청마다 INFO 줄을 표준오류에 남겨 `hoa investigate`의 요약을 덮는다. `FASTMCP_LOG_LEVEL` 환경변수는 생성자 기본값(`log_level="INFO"`)에 밀려 듣지 않으므로 서버 코드에서 `log_level="WARNING"`을 준다.
-- 이 plan의 코드는 scratch 작업 공간에서 실제로 돌려 봤다. 단위 테스트 178개(agent 32 + demo_app 28 + eval 41 + mcp_servers 70 + scripts 7, `-W error`), ruff check·format, kind 통합 테스트 8개(에이전트 배선 1 + 러너 1 + 기존 MCP 6)가 Windows 개발 PC에서 통과했다. 실제 LLM으로 `hoa investigate`를 Gemini(3.5 Flash·3.5 Flash-Lite)와 Gemma로 image-pull에 돌려 셋 다 `image_pull_error`를 맞혔고, `hoa-eval run --model gemma --repeat 1`로 러너를 끝까지 돌렸다.
+- 이 plan의 코드는 scratch 작업 공간에서 실제로 돌려 봤다. 단위 테스트 179개(agent 33 + demo_app 28 + eval 41 + mcp_servers 70 + scripts 7, `-W error`), ruff check·format, kind 통합 테스트 8개(에이전트 배선 1 + 러너 1 + 기존 MCP 6)가 Windows 개발 PC에서 통과했다. 실제 LLM으로 `hoa investigate`를 Gemini(3.5 Flash·3.5 Flash-Lite)와 Gemma로 image-pull에 돌려 셋 다 `image_pull_error`를 맞혔고, `hoa-eval run --model gemma --repeat 1`로 러너를 끝까지 돌렸다.
 
 **선행 완료:** 작업 브랜치 `feat/round01b-agent-eval`(`dev` `98b4a1b`에서 분기, spec 커밋 `fbe2845`, push됨). 저장소 루트의 `.env`(커밋 안 함)에 `GEMINI_API_KEY`·`HOA_GEMMA_BASE_URL`이 있고, 회사 GPU 서버의 vLLM은 도구 호출 옵션(`--enable-auto-tool-choice --tool-call-parser gemma4`)으로 다시 떠 있다. 개발 PC의 kind 클러스터 `hoa`가 떠 있다.
 
@@ -39,13 +40,13 @@
 | `pyproject.toml` | 워크스페이스 멤버 넷(`agent`·`demo_app`·`eval`·`mcp_servers`) |
 | `agent/pyproject.toml` | 에이전트 의존성(langgraph·langchain-openai·langchain-mcp-adapters·openai·pydantic), 버전 0.1.0 |
 | `agent/src/hoa_agent/diagnosis.py` | `CauseLabel`(7개)·`Evidence`·`Diagnosis` |
-| `agent/src/hoa_agent/llm.py` | `ModelProfile`·`load_profile`(gemini·gemma), `ChatOpenAICompat`(도구 호출 확장 필드 보존), `build_chat_model` |
+| `agent/src/hoa_agent/llm.py` | `ModelProfile`·`load_profile`(gemma 기본·gemini), `ChatOpenAICompat`(도구 호출 확장 필드 보존), `build_chat_model` |
 | `agent/src/hoa_agent/prompts.py` | 시스템 프롬프트(조사)와 진단 지시(영어) |
 | `agent/src/hoa_agent/graph.py` | `InvestigationState`·`Budget`·`build_graph`(investigate·tools·diagnose), 예산 판정, 건너뛴 도구 호출 응답 |
 | `agent/src/hoa_agent/result.py` | `InvestigationResult`(진단·도구 기록·형식 깨진 호출·사용량·시간), 메시지 → 결과 |
 | `agent/src/hoa_agent/mcp_tools.py` | `hoa-mcp-k8s-read` stdio 연결(자기 설정만 넘김), 조사 한 번 동안의 도구 목록 |
 | `agent/src/hoa_agent/investigate.py` | `run_investigation` — 프로필 → 모델 → MCP 도구 → 그래프 → 결과, `ExceptionGroup` 풀기 |
-| `agent/src/hoa_agent/cli.py` | `hoa investigate --model gemini|gemma [--json] "<경보>"`, 종료 코드 0·1·2·3 |
+| `agent/src/hoa_agent/cli.py` | `hoa investigate [--model gemma|gemini] [--json] "<경보>"`(기본 gemma), 종료 코드 0·1·2·3 |
 | `agent/tests/conftest.py` | `ScriptedChatModel`(대본대로 답하는 가짜 채팅 모델)과 픽스처 |
 | `agent/tests/integration/test_agent_kind.py` | 실제 MCP 서버 + 가짜 모델로 그래프 전체 |
 | `mcp_servers/src/hoa_mcp/k8s_read/server.py` | FastMCP 로그 수준 WARNING(한 줄) |
@@ -58,11 +59,11 @@
 | `eval/src/hoa_eval/scoring.py` | 원인·대상 일치, 인용 확인, 수치 → `Score` |
 | `eval/src/hoa_eval/runner.py` | `run_once`(주입 → 대기 → 조사 → 복구 → 채점), `run_batch`(반복·쉼·한도에서 멈춤) |
 | `eval/src/hoa_eval/report.py` | JSONL 읽기, 요약 표·회차별 표(마크다운) |
-| `eval/src/hoa_eval/cli.py` | `hoa-eval run`·`hoa-eval report` |
+| `eval/src/hoa_eval/cli.py` | `hoa-eval run`(기본 gemma)·`hoa-eval report` |
 | `eval/tests/integration/test_runner_kind.py` | 실제 kind에서 주입·대기·채점·복구 |
 | `demo_app/Dockerfile`·`Dockerfile.dockerignore` | `eval/pyproject.toml` 추가 |
 | `.gitignore`·`.env.example` | `eval/results/` 제외, LLM 변수 이름 |
-| 문서 | `CLAUDE.md`(승인 문구 3곳)·`GIT_WORKFLOW.md`·`README.md`·전체 설계·코딩 표준·반복 함정 7~11 |
+| 문서 | `CLAUDE.md`(승인 문구 3곳)·`GIT_WORKFLOW.md`·`README.md`·전체 설계(Gemma 기본 모델 분업 포함)·코딩 표준·반복 함정 7~11 |
 
 ---
 
@@ -71,41 +72,317 @@
 **Files:**
 - Modify: `docs/superpowers/specs/2026-11-16-round01b-agent-llm-eval-design.md`
 
-- [ ] **Step 1: 열한 곳을 고친다(각 「전」 문장은 파일에 한 번씩만 나온다)**
+- [ ] **Step 1: 스물한 곳을 고친다(각 「전」은 파일에 한 번씩만 나온다)**
 
-1. 머리말 상태 줄 — 전: `> 상태: 초안(2026-11-16) — 사용자 검토 대기` → 후: `> 상태: 승인(2026-11-16)`
-2. §3 Gemini 항목의 끝 문장 — 전: `모델 이름은 plan에서 이 키로 모델 목록을 조회해, 무료 등급에서 도구 호출이 되는 최신 Flash 계열로 정한다(설계서 §10).`
-   후: ``모델은 `gemini-3.5-flash-lite`이고 `HOA_GEMINI_MODEL`로 바꿀 수 있다(plan 작성 중 확인, 2026-11-16 — 3.5 Flash는 무료 등급 하루 20회에 조사 1건 약 200초, 3.8·3.7 Flash는 503·시간 초과, 2.5 Flash는 404). Gemini 3는 도구 호출마다 `thought_signature`를 붙이고 다음 요청에서 그대로 돌려받아야 하므로 `llm.py`의 `ChatOpenAI` 하위 클래스가 그 값을 보존한다.``
-3. §4.1 상태 줄 — 전: ``- **상태**: 경보, 메시지 목록(LangGraph `add_messages`), 도구 호출 수, 누적 입력 토큰,``
-   후: ``- **상태**: 경보, 메시지 목록(LangGraph `add_messages`), 도구 호출 수, 문맥 크기(마지막 요청의 입력 토큰),``
-4. §4.1 예산 줄 — 전: `도구 호출 최대 6번, 누적 입력 토큰 약 26,000에서 끊는다(응답의 사용량 메타데이터로 센다).`
-   후: `도구 호출 최대 6번, 마지막 요청의 입력 토큰이 26,000에 이르면 끊는다(응답의 사용량 메타데이터로 센다 — 매 요청이 대화 전체를 다시 보내므로 누적 합이 아니라 마지막 값이 그때의 문맥 크기다).`
-5. §4.1 diagnose 줄 — 전: `방식(JSON 스키마 / 함수 호출)은 두 엔드포인트에서 실제로 되는 쪽으로 plan에서 정한다.`
-   후: ``방식은 JSON 스키마(`method="json_schema"`)다 — 두 엔드포인트 모두에서 확인했다(plan 작성 중, 2026-11-16).``
-6. §4.1 CLI 줄 끝 — 전: ``​`--json`이면 JSON만 낸다.`` → 후: ``​`--json`이면 JSON만 낸다. 종료 코드는 0 성공, 1 조사 실패(LLM 오류·스키마 위반), 2 설정 오류, 3 LLM 요청 한도다.``
-7. §4.3 실행 한 번 — 전: `- **실행 한 번**: 복구 → 주입 → 증상 대기 →` → 후: `- **실행 한 번**: 복구(종료 중인 옛 파드가 사라질 때까지) → 주입 → 증상 대기 →`
-8. §4.3 채점 — 전: `(인용 문장 중 출력에 그대로 있는 비율),`
-   후: ``(인용 문장 중 출력에 그대로 있는 비율 — 따옴표·백슬래시·공백 차이는 무시해 JSON 이스케이프와 `키: 값` 꼴 인용을 같은 문장으로 보고, 실패한 도구 호출의 출력은 근거로 치지 않는다),``
-9. §7 위험 표 첫 행 — 전: `한도 오류는 재시도하고, 그래도 막히면 그 회차를 「한도 초과」로 기록한다`
-   후: `한도 오류는 재시도하고, 그래도 막히면 그 회차를 「한도 초과」로 기록하고 남은 회차를 멈춘다(하루 한도는 태평양 시간 자정에 초기화된다 — 다음 날 남은 시나리오만 다시 돌려 합친다)`
-10. §7 구조화 출력 행 — 전: `| 두 엔드포인트의 구조화 출력 지원이 다르다 | plan에서 두 곳 모두 실제로 확인하고 방식을 고른다. 모델별로 다르면 설정 묶음에 둔다 |`
-    후: ``| 두 엔드포인트의 구조화 출력 지원이 다르다 | 두 곳 모두 `json_schema`가 됐다(2026-11-16). 달라지면 설정 묶음에 둔다 |``
-11. §4.4 의존성 줄 — 전: ``- `agent` 의존성: `langgraph`, `langchain-openai`, `langchain-mcp-adapters`, `pydantic`.``
-    후: ``- `agent` 의존성: `langgraph`, `langchain-openai`, `langchain-mcp-adapters`, `openai`(CLI가 요청 한도·API 오류를 직접 잡는다), `pydantic`.``
+Gemma 위주(사용자 결정, plan 검토 중 2026-11-16)와 plan을 쓰며 확인한 것을 반영한다.
+
+1. 머리말 상태 줄
+
+   전:
+
+   ```text
+   > 상태: 초안(2026-11-16) — 사용자 검토 대기
+   ```
+
+   후:
+
+   ```text
+   > 상태: 승인(2026-11-16)
+   ```
+
+2. §1 목표 문단
+
+   전:
+
+   ```text
+   평가 러너가 장애 2종을 Gemini(무료 등급)와 회사 GPU의 Gemma로 각각 돌려 자동 채점하고 비교표를 남긴다.
+   ```
+
+   후:
+
+   ```text
+   평가 러너가 장애 2종을 기본 모델인 회사 GPU의 Gemma로 3회씩, 비교 기준인 Gemini(무료 등급)로 1회씩 돌려 자동 채점하고 비교표를 남긴다(Gemma 위주 — 사용자 결정 2026-11-16).
+   ```
+
+3. §1 완료 기준 1
+
+   전:
+
+   ```text
+   1. 시나리오 2종 × 모델 2종 × 3회 = 12회 실행의 결과표가
+   ```
+
+   후:
+
+   ```text
+   1. Gemma 6회(시나리오 2종 × 3회)와 Gemini 2회(시나리오마다 1회) 실행의 결과표가
+   ```
+
+4. §1 완료 기준 2
+
+   전:
+
+   ```text
+   2. Gemini가 두 시나리오에서 각각 3회 중 2회 이상 원인 라벨을 맞힌다. Gemma는 결과를 그대로 기록하고, 기준에 못 미치면 원인 분석을 완료노트에 적는다.
+   ```
+
+   후:
+
+   ```text
+   2. Gemma가 두 시나리오에서 각각 3회 중 2회 이상 원인 라벨을 맞힌다. Gemini는 결과를 비교 기준으로 그대로 기록한다. 기준에 못 미치거나 Gemini보다 눈에 띄게 낮은 쪽이 있으면 원인 분석을 완료노트에 적는다.
+   ```
+
+5. §2 범위 표
+
+   전:
+
+   ```text
+   | `llm.py` — Gemini·Gemma 설정 묶음, `ChatOpenAI` 주입 |
+   ```
+
+   후:
+
+   ```text
+   | `llm.py` — Gemma(기본)·Gemini 설정 묶음, `ChatOpenAI` 주입 |
+   ```
+
+6. §3 Gemini 항목 끝
+
+   전:
+
+   ```text
+   모델 이름은 plan에서 이 키로 모델 목록을 조회해, 무료 등급에서 도구 호출이 되는 최신 Flash 계열로 정한다(설계서 §10).
+   ```
+
+   후:
+
+   ```text
+   모델은 `gemini-3.5-flash-lite`이고 `HOA_GEMINI_MODEL`로 바꿀 수 있다(plan 작성 중 확인, 2026-11-16 — 3.5 Flash는 무료 등급 하루 20회에 조사 1건 약 200초, 3.8·3.7 Flash는 503·시간 초과, 2.5 Flash는 404). Gemini 3는 도구 호출마다 `thought_signature`를 붙이고 다음 요청에서 그대로 돌려받아야 하므로 `llm.py`의 `ChatOpenAI` 하위 클래스가 그 값을 보존한다.
+   ```
+
+7. §3 Gemma 항목 머리
+
+   전:
+
+   ```text
+   - **Gemma**: 회사 GPU 서버의 vLLM(모델 이름 `gemma4-26b-a4b`, 문맥 32K, thinking 꺼짐).
+   ```
+
+   후:
+
+   ```text
+   - **Gemma**(기본 모델): 회사 GPU 서버의 vLLM(모델 이름 `gemma4-26b-a4b`, 문맥 32K, thinking 꺼짐). 요청 한도가 없고 클러스터 데이터가 회사 밖으로 나가지 않아 기본으로 쓴다 — Gemini는 회사망 밖에서의 대체이자 평가의 비교 기준이다.
+   ```
+
+8. §4.1 상태
+
+   전:
+
+   ```text
+   - **상태**: 경보, 메시지 목록(LangGraph `add_messages`), 도구 호출 수, 누적 입력 토큰,
+   ```
+
+   후:
+
+   ```text
+   - **상태**: 경보, 메시지 목록(LangGraph `add_messages`), 도구 호출 수, 문맥 크기(마지막 요청의 입력 토큰),
+   ```
+
+9. §4.1 예산
+
+   전:
+
+   ```text
+   도구 호출 최대 6번, 누적 입력 토큰 약 26,000에서 끊는다(응답의 사용량 메타데이터로 센다).
+   ```
+
+   후:
+
+   ```text
+   도구 호출 최대 6번, 마지막 요청의 입력 토큰이 26,000에 이르면 끊는다(응답의 사용량 메타데이터로 센다 — 매 요청이 대화 전체를 다시 보내므로 누적 합이 아니라 마지막 값이 그때의 문맥 크기다).
+   ```
+
+10. §4.1 diagnose
+
+   전:
+
+   ```text
+   방식(JSON 스키마 / 함수 호출)은 두 엔드포인트에서 실제로 되는 쪽으로 plan에서 정한다.
+   ```
+
+   후:
+
+   ```text
+   방식은 JSON 스키마(`method="json_schema"`)다 — 두 엔드포인트 모두에서 확인했다(plan 작성 중, 2026-11-16).
+   ```
+
+11. §4.1 CLI 머리
+
+   전:
+
+   ```text
+   `hoa investigate --model gemini|gemma "<경보>"`.
+   ```
+
+   후:
+
+   ```text
+   `hoa investigate [--model gemma|gemini] "<경보>"`(기본 `gemma`).
+   ```
+
+12. §4.1 CLI 끝
+
+   전:
+
+   ```text
+   `--json`이면 JSON만 낸다.
+   ```
+
+   후:
+
+   ```text
+   `--json`이면 JSON만 낸다. 종료 코드는 0 성공, 1 조사 실패(LLM 오류·스키마 위반), 2 설정 오류, 3 LLM 요청 한도다.
+   ```
+
+13. §4.2 설정 묶음
+
+   전:
+
+   ```text
+   모델 이름은 `HOA_GEMINI_MODEL` 또는 plan에서 정한 기본값), `gemma`(`HOA_GEMMA_BASE_URL`, `gemma4-26b-a4b`, 키 없음).
+   ```
+
+   후:
+
+   ```text
+   모델 이름은 `HOA_GEMINI_MODEL` 또는 `gemini-3.5-flash-lite`), `gemma`(`HOA_GEMMA_BASE_URL`, `gemma4-26b-a4b`, 키 없음). 기본 프로필은 `gemma`다.
+   ```
+
+14. §4.3 실행 한 번
+
+   전:
+
+   ```text
+   - **실행 한 번**: 복구 → 주입 → 증상 대기 →
+   ```
+
+   후:
+
+   ```text
+   - **실행 한 번**: 복구(종료 중인 옛 파드가 사라질 때까지) → 주입 → 증상 대기 →
+   ```
+
+15. §4.3 채점
+
+   전:
+
+   ```text
+   (인용 문장 중 출력에 그대로 있는 비율),
+   ```
+
+   후:
+
+   ```text
+   (인용 문장 중 출력에 그대로 있는 비율 — 따옴표·백슬래시·공백 차이는 무시해 JSON 이스케이프와 `키: 값` 꼴 인용을 같은 문장으로 보고, 실패한 도구 호출의 출력은 근거로 치지 않는다),
+   ```
+
+16. §4.3 CLI
+
+   전:
+
+   ```text
+   `hoa-eval run --model gemini|gemma --repeat 3 [--scenario <이름>] [--pause <초>]`
+   ```
+
+   후:
+
+   ```text
+   `hoa-eval run [--model gemma|gemini] [--repeat 3] [--scenario <이름>] [--pause <초>]`(기본 `gemma`)
+   ```
+
+17. §4.4 의존성
+
+   전:
+
+   ```text
+   - `agent` 의존성: `langgraph`, `langchain-openai`, `langchain-mcp-adapters`, `pydantic`.
+   ```
+
+   후:
+
+   ```text
+   - `agent` 의존성: `langgraph`, `langchain-openai`, `langchain-mcp-adapters`, `openai`(CLI가 요청 한도·API 오류를 직접 잡는다), `pydantic`.
+   ```
+
+18. §5 실제 평가
+
+   전:
+
+   ```text
+   `uv run --env-file .env hoa-eval run --model gemini --repeat 3`, 같은 것을 `gemma`로.
+   ```
+
+   후:
+
+   ```text
+   `uv run --env-file .env hoa-eval run --repeat 3`(Gemma), 비교 기준으로 `uv run --env-file .env hoa-eval run --model gemini --repeat 1`.
+   ```
+
+19. §6.2 전체 설계 행
+
+   전:
+
+   ```text
+   | 전체 설계 | §10 「Gemini 모델 이름」·「조사 1건의 문맥·토큰 예산」 행을 결정된 값으로 바꾸고 §7 round01b 행을 실제 범위로 맞춘다 |
+   ```
+
+   후:
+
+   ```text
+   | 전체 설계 | §10 「Gemini 모델 이름」·「조사 1건의 문맥·토큰 예산」 행을 결정된 값으로 바꾸고 §7 round01b 행을 실제 범위로 맞춘다. 모델 기본값을 Gemma로 바꾼다(§2 결정 요약, §3 배치, §4 그림·모델 분업, §5 지식 층 — 사용자 결정 2026-11-16) |
+   ```
+
+20. §7 요청 한도 행
+
+   전:
+
+   ```text
+   한도 오류는 재시도하고, 그래도 막히면 그 회차를 「한도 초과」로 기록한다
+   ```
+
+   후:
+
+   ```text
+   한도 오류는 재시도하고, 그래도 막히면 그 회차를 「한도 초과」로 기록하고 남은 회차를 멈춘다(하루 한도는 태평양 시간 자정에 초기화된다 — 다음 날 남은 시나리오만 다시 돌려 합친다)
+   ```
+
+21. §7 구조화 출력 행
+
+   전:
+
+   ```text
+   | 두 엔드포인트의 구조화 출력 지원이 다르다 | plan에서 두 곳 모두 실제로 확인하고 방식을 고른다. 모델별로 다르면 설정 묶음에 둔다 |
+   ```
+
+   후:
+
+   ```text
+   | 두 엔드포인트의 구조화 출력 지원이 다르다 | 두 곳 모두 `json_schema`가 됐다(2026-11-16). 달라지면 설정 묶음에 둔다 |
+   ```
 
 - [ ] **Step 2: 반영 확인**
 
-Run: `grep -c '상태: 승인\|gemini-3.5-flash-lite\|문맥 크기(마지막 요청\|마지막 요청의 입력 토큰이 26,000\|method="json_schema"\|3 LLM 요청 한도다\|종료 중인 옛 파드\|따옴표·백슬래시·공백\|남은 회차를 멈춘다\|json_schema`가 됐다\|직접 잡는다' docs/superpowers/specs/2026-11-16-round01b-agent-llm-eval-design.md`
-Expected: `11`
+Run: `grep -c '상태: 승인\|Gemma 6회(시나리오 2종\|Gemma가 두 시나리오에서\|Gemma(기본)·Gemini\|기본 프로필은 `gemma`다\|마지막 요청의 입력 토큰이 26,000\|json_schema`가 됐다' docs/superpowers/specs/2026-11-16-round01b-agent-llm-eval-design.md`
+Expected: `7`
 
-Run: `grep -c '누적 입력 토큰\|사용자 검토 대기\|plan에서 정한다' docs/superpowers/specs/2026-11-16-round01b-agent-llm-eval-design.md`
+Run: `grep -c '사용자 검토 대기\|누적 입력 토큰\|plan에서 정한\|Gemini가 두 시나리오에서\|모델 2종 × 3회' docs/superpowers/specs/2026-11-16-round01b-agent-llm-eval-design.md`
 Expected: `0`
 
 - [ ] **Step 3: 커밋**
 
 ```bash
 git add docs/superpowers/specs/2026-11-16-round01b-agent-llm-eval-design.md
-git commit -m "[Docs] round01b spec 보정 — Gemini 3.5 Flash-Lite·도구 호출 서명, json_schema, 문맥 크기 예산, 종료 코드, 복구 대기, 인용 정규화, openai 의존성"
+git commit -m "[Docs] round01b spec 보정 — Gemma 위주(완료 기준·기본 모델), Gemini 3.5 Flash-Lite·도구 호출 서명, json_schema, 문맥 크기 예산, 종료 코드, 복구 대기, 인용 정규화"
 ```
 
 ---
@@ -532,7 +809,7 @@ git commit -m "[Feat] 에이전트 진단 모델(원인 라벨 7개·근거·확
 - Create: `agent/src/hoa_agent/llm.py`
 - Create: `agent/tests/test_llm.py`
 
-`load_profile`은 환경변수(`os.environ` 대신 주입받는 매핑)에서 설정 묶음을 만든다 — 키·주소가 없으면 어느 변수가 없는지 알려 주고 `LLMConfigError`로 실패한다. API 키는 `SecretStr`이라 `repr`에 나오지 않는다.
+`DEFAULT_MODEL`은 `gemma`다 — 회사 GPU의 Gemma가 기본이고 Gemini는 회사망 밖의 대체·평가 비교 기준이다(사용자 결정 2026-11-16). `load_profile`은 환경변수(`os.environ` 대신 주입받는 매핑)에서 설정 묶음을 만든다 — 키·주소가 없으면 어느 변수가 없는지 알려 주고 `LLMConfigError`로 실패한다. API 키는 `SecretStr`이라 `repr`에 나오지 않는다.
 
 `ChatOpenAICompat`은 `ChatOpenAI`의 비공개 메서드 둘을 재정의한다.
 - `_create_chat_result`: 응답 원문의 `tool_calls[].extra_content`를 도구 호출 id별로 `AIMessage.additional_kwargs["hoa_tool_call_extras"]`에 보관한다.
@@ -692,7 +969,10 @@ GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 # 3.5 Flash-Lite는 같은 조사를 26초에 맞혔다(3.8·3.7 Flash는 503·시간 초과, 2.5 Flash는 404)
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
 GEMMA_MODEL = "gemma4-26b-a4b"
-MODEL_NAMES = ("gemini", "gemma")
+# 기본은 회사 GPU의 Gemma — 요청 한도가 없고 클러스터 데이터가 밖으로 나가지 않는다.
+# Gemini는 회사망 밖에서의 대체이자 평가의 비교 기준이다(사용자 결정 2026-11-16)
+DEFAULT_MODEL = "gemma"
+MODEL_NAMES = ("gemma", "gemini")
 REQUEST_TIMEOUT_SECONDS = 120
 MAX_RETRIES = 2
 TOOL_CALL_EXTRAS = "hoa_tool_call_extras"
@@ -1552,9 +1832,9 @@ git commit -m "[Feat] MCP k8s-read stdio 연결(자기 설정만 전달)과 조�
 **Files:**
 - Modify: `agent/src/hoa_agent/cli.py`, `agent/tests/test_cli.py`
 
-`main`은 조사 함수(`investigator`)를 주입받는다 — 테스트는 가짜 함수로 출력 형식과 종료 코드만 본다(LLM·클러스터 없음). 표준출력에는 `InvestigationResult` JSON을, 표준오류에는 한국어 요약을 쓴다(`--json`이면 요약을 뺀다). 종료 코드는 0 성공, 1 조사 실패(`DiagnosisSchemaError`·`openai.APIError`), 2 설정 오류(`LLMConfigError`·`MCPSetupError`, 그리고 argparse의 사용법 오류), 3 LLM 요청 한도(`openai.RateLimitError` — `APIError`의 하위 클래스라 먼저 잡는다). 평가 러너가 3을 보고 남은 회차를 멈춘다.
+`--model`의 기본값은 `llm.DEFAULT_MODEL`(`gemma`)이다. `main`은 조사 함수(`investigator`)를 주입받는다 — 테스트는 가짜 함수로 출력 형식과 종료 코드만 본다(LLM·클러스터 없음). 표준출력에는 `InvestigationResult` JSON을, 표준오류에는 한국어 요약을 쓴다(`--json`이면 요약을 뺀다). 종료 코드는 0 성공, 1 조사 실패(`DiagnosisSchemaError`·`openai.APIError`), 2 설정 오류(`LLMConfigError`·`MCPSetupError`, 그리고 argparse의 사용법 오류), 3 LLM 요청 한도(`openai.RateLimitError` — `APIError`의 하위 클래스라 먼저 잡는다). 평가 러너가 3을 보고 남은 회차를 멈춘다.
 
-조사를 시작하기 전에 표준출력·표준오류를 UTF-8로 고정한다 — Windows에서 파일·파이프로 돌리면 cp949가 돼 경보의 `—` 같은 문자에서 깨진다(반복 함정 8번).
+`main`은 인자를 읽기 전에 표준출력·표준오류를 UTF-8로 고정한다 — Windows에서 파일·파이프로 돌리면 cp949가 돼 경보의 `—` 같은 문자와 한국어 도움말이 깨진다(반복 함정 8번).
 
 - [ ] **Step 1: 실패하는 테스트**
 
@@ -1620,6 +1900,17 @@ def test_investigate_prints_json_and_a_korean_summary(
     assert "[get_events] Failed to pull image" in err
 
 
+def test_model_defaults_to_gemma(result: InvestigationResult) -> None:
+    seen: list[str] = []
+
+    async def fake(alert: str, model: str) -> InvestigationResult:
+        seen.append(model)
+        return result
+
+    assert main(["investigate", "orders rollout stuck"], investigator=fake) == 0
+    assert seen == ["gemma"]
+
+
 def test_json_flag_keeps_stderr_quiet(
     capsys: pytest.CaptureFixture[str], result: InvestigationResult
 ) -> None:
@@ -1680,7 +1971,7 @@ import openai
 from hoa_agent import __version__
 from hoa_agent.graph import DiagnosisSchemaError
 from hoa_agent.investigate import run_investigation
-from hoa_agent.llm import MODEL_NAMES, LLMConfigError
+from hoa_agent.llm import DEFAULT_MODEL, MODEL_NAMES, LLMConfigError
 from hoa_agent.mcp_tools import MCPSetupError
 from hoa_agent.result import InvestigationResult
 
@@ -1694,7 +1985,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"hoa {__version__}")
     commands = parser.add_subparsers(dest="command")
     investigate = commands.add_parser("investigate", help="경보 하나를 조사해 진단을 낸다")
-    investigate.add_argument("--model", choices=MODEL_NAMES, required=True, help="쓸 LLM")
+    investigate.add_argument(
+        "--model", choices=MODEL_NAMES, default=DEFAULT_MODEL, help=f"쓸 LLM(기본 {DEFAULT_MODEL})"
+    )
     investigate.add_argument(
         "--json", action="store_true", help="표준오류의 사람용 요약 없이 JSON만 낸다"
     )
@@ -1727,7 +2020,6 @@ def use_utf8_output() -> None:
 
 
 def investigate_command(args: argparse.Namespace, investigator: Investigator) -> int:
-    use_utf8_output()
     try:
         result = asyncio.run(investigator(args.alert, args.model))
     except (LLMConfigError, MCPSetupError) as exc:
@@ -1748,6 +2040,7 @@ def investigate_command(args: argparse.Namespace, investigator: Investigator) ->
 def main(
     argv: Sequence[str] | None = None, *, investigator: Investigator = run_investigation
 ) -> int:
+    use_utf8_output()
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "investigate":
@@ -1759,10 +2052,10 @@ def main(
 - [ ] **Step 4: 통과 확인**
 
 Run: `uv run pytest agent -q && uv run ruff check . && uv run ruff format --check .`
-Expected: `32 passed`, 린트·포맷 통과
+Expected: `33 passed`, 린트·포맷 통과
 
 Run: `uv run hoa investigate --help`
-Expected: `--model {gemini,gemma}`·`--json`·`alert`가 보인다.
+Expected: `--model {gemma,gemini}`(도움말에 「기본 gemma」)·`--json`·`alert`가 보인다. 파이프로 넘겨도 한국어가 깨지지 않는다.
 
 - [ ] **Step 5: 커밋**
 
@@ -3213,7 +3506,7 @@ git commit -m "[Feat] 평가 러너 — 회차 실행(복구는 finally)·반복
 - Create: `eval/src/hoa_eval/cli.py`
 - Create: `eval/tests/test_cli.py`
 
-- `hoa-eval run --model gemini|gemma [--repeat 3] [--scenario <이름>]… [--pause 20] [--results-dir eval/results]`: 결과를 `<결과 폴더>/<UTC 시각>-<모델>.jsonl`에 한 줄씩 쓰고, 회차마다 표준오류에 「맞음·틀림·오류」를 찍고, 끝나면 요약 표와 결과 파일 경로를 낸다. 종료 코드: 0, 시나리오 이름 오류 2, kubectl·`hoa` 실패 1, 요청 한도로 멈춤 3.
+- `hoa-eval run [--model gemma|gemini] [--repeat 3] [--scenario <이름>]… [--pause 20] [--results-dir eval/results]`: 결과를 `<결과 폴더>/<UTC 시각>-<모델>.jsonl`에 한 줄씩 쓰고, 회차마다 표준오류에 「맞음·틀림·오류」를 찍고, 끝나면 요약 표와 결과 파일 경로를 낸다. 종료 코드: 0, 시나리오 이름 오류 2, kubectl·`hoa` 실패 1, 요청 한도로 멈춤 3. `--model` 기본값은 `gemma`(에이전트와 같은 값 — 멤버 경계라 import하지 않고 옮겨 둔다).
 - `hoa-eval report <jsonl…>`: 여러 결과 파일을 합쳐 요약 표와 회차별 표를 낸다(하루 한도 때문에 날을 나눠 돌린 결과를 합칠 때 쓴다).
 
 `main`은 클러스터와 에이전트 함수를 주입받는다 — 테스트는 가짜 kubectl과 가짜 에이전트로 결과 파일·표·종료 코드를 본다.
@@ -3255,19 +3548,20 @@ def test_version_flag_prints_name_and_version(capsys: pytest.CaptureFixture[str]
     assert capsys.readouterr().out.strip() == f"hoa-eval {__version__}"
 
 
-def test_run_writes_jsonl_and_prints_the_summary(
+def test_run_defaults_to_gemma_writes_jsonl_and_prints_the_summary(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     make_report: Callable[..., AgentReport],
 ) -> None:
+    models: list[str] = []
+
     def agent(alert: str, model: str) -> AgentOutcome:
+        models.append(model)
         return AgentOutcome(report=make_report(cause_label="bad_config", target="demo/inventory"))
 
     code = main(
         [
             "run",
-            "--model",
-            "gemma",
             "--repeat",
             "1",
             "--scenario",
@@ -3283,6 +3577,7 @@ def test_run_writes_jsonl_and_prints_the_summary(
 
     out, err = capsys.readouterr()
     assert code == 0
+    assert models == ["gemma"]
     [path] = tmp_path.glob("*-gemma.jsonl")
     [record] = load_records([path])
     assert record.score is not None
@@ -3338,7 +3633,9 @@ from hoa_eval.report import load_records, runs_table, summary_table
 from hoa_eval.runner import Agent, Cluster, RunRecord, run_batch
 from hoa_eval.scenario import REPO_ROOT, ScenarioError, load_scenarios
 
-MODEL_NAMES = ("gemini", "gemma")
+# hoa_agent.llm과 같은 값 — 멤버 경계라 import하지 않는다
+DEFAULT_MODEL = "gemma"
+MODEL_NAMES = ("gemma", "gemini")
 RESULTS_DIR = REPO_ROOT / "eval" / "results"
 
 
@@ -3349,7 +3646,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"hoa-eval {__version__}")
     commands = parser.add_subparsers(dest="command")
     run = commands.add_parser("run", help="장애를 넣고 에이전트를 돌려 채점한다")
-    run.add_argument("--model", choices=MODEL_NAMES, required=True, help="쓸 LLM")
+    run.add_argument(
+        "--model", choices=MODEL_NAMES, default=DEFAULT_MODEL, help=f"쓸 LLM(기본 {DEFAULT_MODEL})"
+    )
     run.add_argument("--repeat", type=int, default=3, help="시나리오마다 돌릴 횟수")
     run.add_argument(
         "--scenario", action="append", default=[], help="돌릴 시나리오 이름(여러 번 줄 수 있다)"
@@ -3362,7 +3661,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def use_utf8_output() -> None:
-    """Windows에서 출력을 파일·파이프로 돌리면 로캘 인코딩(cp949)이 돼 표의 문자가 깨진다."""
+    """Windows에서 출력을 파일·파이프로 돌리면 로캘 인코딩(cp949)이 돼 도움말·표의 문자가 깨진다."""
     for stream in (sys.stdout, sys.stderr):
         if isinstance(stream, io.TextIOWrapper):
             stream.reconfigure(encoding="utf-8")
@@ -3407,9 +3706,9 @@ def main(
     cluster: Cluster | None = None,
     agent: Agent = run_agent,
 ) -> int:
+    use_utf8_output()
     parser = build_parser()
     args = parser.parse_args(argv)
-    use_utf8_output()
     if args.command == "run":
         return run_command(args, cluster or DemoCluster(Kubectl()), agent)
     if args.command == "report":
@@ -3425,10 +3724,10 @@ def main(
 - [ ] **Step 4: 통과 확인**
 
 Run: `uv run pytest -q && uv run ruff check . && uv run ruff format --check .`
-Expected: `178 passed, 7 deselected`(러너 통합 테스트는 Task 15에서 더한다), 린트·포맷 통과
+Expected: `179 passed, 7 deselected`(러너 통합 테스트는 Task 15에서 더한다), 린트·포맷 통과
 
 Run: `uv run hoa-eval run --help`
-Expected: `--model`·`--repeat`·`--scenario`·`--pause`·`--results-dir`가 보인다.
+Expected: `--model {gemma,gemini}`(기본 gemma)·`--repeat`·`--scenario`·`--pause`·`--results-dir`가 보인다.
 
 - [ ] **Step 5: 커밋**
 
@@ -3749,7 +4048,7 @@ Run: `uv run pytest -m integration -v`
 Expected: `8 passed`(에이전트 1 + 러너 1 + MCP 6). 러너 테스트의 복구가 종료 중인 파드를 기다리므로 바로 뒤의 gateway 프록시 테스트가 흔들리지 않는다.
 
 Run: `uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run pre-commit run --all-files`
-Expected: `178 passed, 8 deselected`, 모두 통과
+Expected: `179 passed, 8 deselected`, 모두 통과
 
 - [ ] **Step 4: 커밋·push·CI**
 
@@ -3763,81 +4062,405 @@ Run: `gh run list --branch feat/round01b-agent-eval --limit 1 --json databaseId,
 Expected: 세 잡 success. 「통합 테스트(kind)」 잡은 CI에 LLM 키가 없어도 돈다(가짜 모델·가짜 에이전트만 쓴다).
 
 ---
-### Task 16: 문서 — `CLAUDE.md`(승인 문구)·운영 문서·전체 설계·코딩 표준·반복 함정
+### Task 16: 문서 — `CLAUDE.md`(승인 문구)·운영 문서·전체 설계(Gemma 기본)·코딩 표준·반복 함정
 
 **Files:**
 - Create: `.env.example`
 - Modify: `CLAUDE.md`, `GIT_WORKFLOW.md`, `README.md`, `docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md`, `docs/standards/coding-standard.md`, `docs/ops/recurring-gotchas.md`
 
-`CLAUDE.md` 세 곳은 spec §6.1 문구 그대로이고 사용자가 spec 승인(2026-11-16)으로 승인했다. Claude Code 자동 모드가 `CLAUDE.md` 수정을 막으면 우회하지 말고 사용자에게 알린다. 아래 「전」 문장은 각 파일에 한 번씩만 나온다.
+`CLAUDE.md` 세 곳은 spec §6.1 문구 그대로이고 사용자가 spec 승인(2026-11-16)으로 승인했다. Claude Code 자동 모드가 `CLAUDE.md` 수정을 막으면 우회하지 말고 사용자에게 알린다. 전체 설계·`README.md`·`GIT_WORKFLOW.md`의 모델 문구는 「기본 LLM은 회사 GPU의 Gemma, Gemini는 회사망 밖의 대체·평가 비교 기준」(사용자 결정, plan 검토 중 2026-11-16)으로 바꾼다. 아래 「전」은 각 파일에 한 번씩만 나온다.
 
 - [ ] **Step 1: `CLAUDE.md` 세 곳(spec §6.1)**
 
-1. §2 루트 파일 — 전: ``​`.python-version`·`.pre-commit-config.yaml`)과 도구 설정 폴더`` → 후: ``​`.python-version`·`.pre-commit-config.yaml`·`.env.example`)과 도구 설정 폴더``
-2. §2 코드 정본 — 전: ``배포 정의는 `deploy/`(Helm·Argo CD)`` → 후: ``배포 정의는 `deploy/`(kind 매니페스트·Helm·Argo CD)``
-3. §3 확인 지점 — 전: `회사 서버의 기존 시스템을 건드리는 작업의 승인은 §4대로` → 후: `회사 서버의 기존 시스템·서버 설정을 바꾸는 작업의 승인은 §4대로`
+1. §2 루트 파일
+
+   전:
+
+   ```text
+   `.python-version`·`.pre-commit-config.yaml`)과 도구 설정 폴더
+   ```
+
+   후:
+
+   ```text
+   `.python-version`·`.pre-commit-config.yaml`·`.env.example`)과 도구 설정 폴더
+   ```
+
+2. §2 코드 정본
+
+   전:
+
+   ```text
+   배포 정의는 `deploy/`(Helm·Argo CD)
+   ```
+
+   후:
+
+   ```text
+   배포 정의는 `deploy/`(kind 매니페스트·Helm·Argo CD)
+   ```
+
+3. §3 확인 지점
+
+   전:
+
+   ```text
+   회사 서버의 기존 시스템을 건드리는 작업의 승인은 §4대로
+   ```
+
+   후:
+
+   ```text
+   회사 서버의 기존 시스템·서버 설정을 바꾸는 작업의 승인은 §4대로
+   ```
 
 - [ ] **Step 2: `GIT_WORKFLOW.md` 두 곳**
 
-1. §머지 승인 규칙 push 줄 — 전: ``회사 서버의 기존 시스템을 건드리는 작업의 승인(`CLAUDE.md` §4)은 별도다.`` → 후: ``회사 서버의 기존 시스템·서버 설정을 바꾸는 작업의 승인(`CLAUDE.md` §4)은 별도다.``
-2. §개발 환경 — `- 각 환경의 세부 절차(설치·접속·기동/정지)는 그 환경이 들어오는 라운드에 이 절에 더한다.` 줄 바로 위에 다음 항목을 넣는다.
+1. §머지 승인 규칙 push 줄
 
-```markdown
-- LLM(round01b): 루트의 `.env`(커밋하지 않는다)에 `.env.example`의 변수를 채운다 — Gemini는 개인 Google 계정의 AI Studio 키(결제를 연결하지 않은 무료 등급), Gemma는 GPU 티어 vLLM의 OpenAI 호환 주소. 값은 `uv run --env-file .env <명령>`으로 넘긴다. 손으로 조사 한 번: `uv run --env-file .env hoa investigate --model gemini "<경보 문장>"`. 평가: `uv run --env-file .env hoa-eval run --model gemini --repeat 3` → 결과는 `eval/results/<시각>-<모델>.jsonl`(커밋하지 않는다), 표는 `uv run hoa-eval report eval/results/*.jsonl`. 둘 다 kind 클러스터와 MCP용 kubeconfig(`dev-cluster.sh up`·`mcp-kubeconfig`)가 있어야 한다. Gemini 무료 등급은 모델마다 하루 요청 수 한도가 있어 한도에 걸리면 `hoa-eval`이 남은 회차를 멈춘다(종료 코드 3) — 다음 날 남은 시나리오만 `--scenario`로 다시 돌리고 `report`로 합친다.
-```
+   전:
 
-- [ ] **Step 3: `README.md` 「시작하기」**
+   ```text
+   회사 서버의 기존 시스템을 건드리는 작업의 승인(`CLAUDE.md` §4)은 별도다.
+   ```
 
-`up`·`fault`·`reset`·`down`을 설명하는 문단 바로 뒤(devcontainer 문단 앞)에 다음을 넣는다.
+   후:
 
-````markdown
-에이전트는 LLM으로 Gemini(무료 등급 API 키) 또는 GPU 티어의 Gemma(vLLM)를 쓴다. `.env.example`을 `.env`로 복사해 값을 채우고(`.env`는 커밋하지 않는다), 장애를 심은 클러스터에서 조사하거나 평가를 돌린다.
+   ```text
+   회사 서버의 기존 시스템·서버 설정을 바꾸는 작업의 승인(`CLAUDE.md` §4)은 별도다.
+   ```
 
-```bash
-bash scripts/dev-cluster.sh fault image-pull
-uv run --env-file .env hoa investigate --model gemini "KubeDeploymentRolloutStuck — namespace=demo deployment=orders: rollout has not progressed"
-bash scripts/dev-cluster.sh reset
-uv run --env-file .env hoa-eval run --model gemini --repeat 3
-```
+2. §개발 환경 — 마지막 항목 위에 LLM 항목
 
-`hoa investigate`는 진단 JSON을 표준출력에, 한국어 요약을 표준오류에 쓴다. `hoa-eval run`은 장애 주입 → 증상 대기 → 조사 → 채점 → 복구를 시나리오(`eval/scenarios/`)마다 돌리고 결과를 `eval/results/`에 남긴다.
-````
+   전:
+
+   ```text
+   - 각 환경의 세부 절차(설치·접속·기동/정지)는 그 환경이 들어오는 라운드에 이 절에 더한다.
+   ```
+
+   후:
+
+   ```text
+   - LLM(round01b): 기본 모델은 GPU 티어 vLLM의 Gemma이고, Gemini(개인 Google 계정의 AI Studio 키 — 결제를 연결하지 않은 무료 등급)는 회사망 밖에서의 대체이자 평가의 비교 기준이다. 루트의 `.env`(커밋하지 않는다)에 `.env.example`의 변수를 채우고 `uv run --env-file .env <명령>`으로 넘긴다. 손으로 조사 한 번: `uv run --env-file .env hoa investigate "<경보 문장>"`(Gemini는 `--model gemini`). 평가: `uv run --env-file .env hoa-eval run --repeat 3` → 결과는 `eval/results/<시각>-<모델>.jsonl`(커밋하지 않는다), 표는 `uv run hoa-eval report eval/results/*.jsonl`. 둘 다 kind 클러스터와 MCP용 kubeconfig(`dev-cluster.sh up`·`mcp-kubeconfig`)가 있어야 한다. Gemini 무료 등급은 모델마다 하루 요청 수 한도가 있어 한도에 걸리면 `hoa-eval`이 남은 회차를 멈춘다(종료 코드 3) — 한도가 풀린 뒤 남은 시나리오만 `--scenario`로 다시 돌리고 `report`로 합친다.
+   - 각 환경의 세부 절차(설치·접속·기동/정지)는 그 환경이 들어오는 라운드에 이 절에 더한다.
+   ```
+
+- [ ] **Step 3: `README.md` 세 곳**
+
+1. 어디서 무엇이 도나 — 개발 PC 행
+
+   전:
+
+   ```text
+   | 개발 PC (kind) — 로컬 티어 | 개발할 때 | 데모 앱·MCP 서버·에이전트(Gemini 무료 등급), 통합 테스트 — GPU 없이 돈다 |
+   ```
+
+   후:
+
+   ```text
+   | 개발 PC (kind) — 로컬 티어 | 개발할 때 | 데모 앱·MCP 서버·에이전트(LLM은 회사망 안이면 GPU 티어의 Gemma, 밖이면 Gemini 무료 등급), 통합 테스트 — GPU 없이 돈다 |
+   ```
+
+2. 어디서 무엇이 도나 — Gemini 행
+
+   전:
+
+   ```text
+   | Gemini | 무료 등급 키(round01~02) → Vertex AI(round03~) | 계획·진단·그래프 추출 |
+   ```
+
+   후:
+
+   ```text
+   | Gemini | 무료 등급 키(round01~02) → Vertex AI(round03~) | 회사 GPU의 Gemma에 닿지 않을 때의 대체, 평가의 비교 기준 |
+   ```
+
+3. 시작하기 — `up` 문단 뒤에 LLM 실행법
+
+   전:
+
+   ```text
+   `up`은 kind 클러스터 `hoa`에 데모 앱(gateway·orders·inventory)을 띄우고 MCP 서버용 읽기 전용 kubeconfig를 만든다. `fault image-pull`·`fault bad-config`로 장애를 심고 `reset`으로 되돌린다. 클러스터를 지울 때는 `down`.
+
+   ```
+
+   후:
+
+   ````text
+   `up`은 kind 클러스터 `hoa`에 데모 앱(gateway·orders·inventory)을 띄우고 MCP 서버용 읽기 전용 kubeconfig를 만든다. `fault image-pull`·`fault bad-config`로 장애를 심고 `reset`으로 되돌린다. 클러스터를 지울 때는 `down`.
+
+   에이전트의 기본 LLM은 GPU 티어의 Gemma(vLLM)이고, 회사망 밖에서는 Gemini(무료 등급 API 키)를 `--model gemini`로 쓴다. `.env.example`을 `.env`로 복사해 값을 채우고(`.env`는 커밋하지 않는다), 장애를 심은 클러스터에서 조사하거나 평가를 돌린다.
+
+   ```bash
+   bash scripts/dev-cluster.sh fault image-pull
+   uv run --env-file .env hoa investigate "KubeDeploymentRolloutStuck — namespace=demo deployment=orders: rollout has not progressed"
+   bash scripts/dev-cluster.sh reset
+   uv run --env-file .env hoa-eval run --repeat 3
+   ```
+
+   `hoa investigate`는 진단 JSON을 표준출력에, 한국어 요약을 표준오류에 쓴다. `hoa-eval run`은 장애 주입 → 증상 대기 → 조사 → 채점 → 복구를 시나리오(`eval/scenarios/`)마다 돌리고 결과를 `eval/results/`에 남긴다.
+
+   ````
 
 - [ ] **Step 4: `.env.example`**
+
+Gemma(기본)를 먼저 둔다.
 
 **파일**: `.env.example`
 
 ```text
 # 루트의 .env로 복사해 값을 채운다(.env는 커밋하지 않는다). 실행: uv run --env-file .env <명령>
-# Gemini — 개인 Google 계정의 AI Studio 키, 결제를 연결하지 않은 무료 등급
-GEMINI_API_KEY=
-# 비우면 hoa_agent/llm.py의 기본 모델을 쓴다
-HOA_GEMINI_MODEL=
-# Gemma — GPU 티어 vLLM의 OpenAI 호환 주소(끝이 /v1). 회사 서버 주소라 이 파일에는 적지 않는다
+# Gemma(기본 모델) — GPU 티어 vLLM의 OpenAI 호환 주소(끝이 /v1). 회사 서버 주소라 이 파일에는 적지 않는다
 HOA_GEMMA_BASE_URL=
+# Gemini(회사망 밖 대체·평가 비교 기준) — 개인 Google 계정의 AI Studio 키, 결제를 연결하지 않은 무료 등급
+GEMINI_API_KEY=
+# 비우면 hoa_agent/llm.py의 기본 모델(gemini-3.5-flash-lite)을 쓴다
+HOA_GEMINI_MODEL=
 ```
 
-- [ ] **Step 5: 전체 설계 다섯 곳**
+- [ ] **Step 5: 전체 설계 열세 곳 — 기본 LLM을 Gemma로, round01b 결정 반영**
 
-1. 머리말 「바뀐 이력」 줄 끝 — 전: ``round01을 round01a·round01b로 나눔. 근거: `docs/superpowers/specs/2026-11-11-round01a-kind-mcp-read-design.md` §3.``
-   후: ``round01을 round01a·round01b로 나눔. 근거: `docs/superpowers/specs/2026-11-11-round01a-kind-mcp-read-design.md` §3. 2026-11-16(round01b) — Gemini 모델과 조사 예산을 정함(§10), Gemini 3의 도구 호출 서명을 `llm.py`가 되돌려 줌. 근거: `docs/superpowers/specs/2026-11-16-round01b-agent-llm-eval-design.md`.``
-2. §4 모델 분업 줄 끝 — 전: `두 쪽 다 OpenAI 호환 API라 같은 클라이언트 코드로 부른다.`
-   후: ``두 쪽 다 OpenAI 호환 API라 같은 클라이언트 코드로 부른다(Gemini 3가 도구 호출마다 붙이는 `thought_signature`를 다음 요청에 되돌려 주는 작은 확장만 `llm.py`에 둔다).``
-3. §7 round01b 행 — 전: `| round01b | 끝-끝 경로: 단일 LangGraph 에이전트 + LLM 두 종(Gemini 무료 등급·회사 GPU의 Gemma, 클러스터는 로컬 티어 kind), 평가 러너 v0 | 시나리오 2종을 러너로 돌려 원인 라벨을 맞힘, 두 모델의 정확도·속도·도구 호출 실패율 비교 |`
-   후: ``| round01b | 끝-끝 경로: 직접 짠 LangGraph 단일 에이전트(MCP `k8s-read` 도구, 조사 예산) + LLM 두 종(Gemini 무료 등급 Flash-Lite·회사 GPU의 Gemma, 클러스터는 로컬 티어 kind), 평가 러너 v0(새 멤버 `eval`) | 시나리오 2종 × 모델 2종 × 3회 결과표 — 원인 라벨 정답률·근거 인용률·도구 호출 수·시간·토큰·형식이 깨진 도구 호출 |``
-4. §10 Gemini 모델 행 — 전: `| Gemini 모델 이름(무료 등급) | round01b | 무료 등급 요청 한도, 도구 호출 품질 |`
-   후: ``| Gemini 모델 이름(무료 등급) | round01b — 결정: `gemini-3.5-flash-lite`(`HOA_GEMINI_MODEL`로 바꾼다) | 2026-11-16 실측 — 3.5 Flash는 무료 등급 하루 20회에 조사 1건 약 200초, 3.8·3.7 Flash는 503·시간 초과, 2.5 Flash는 404. 3.5 Flash-Lite는 같은 조사를 26초에 맞혔다 |``
-5. §10 예산 행 — 전: `| 조사 1건의 문맥·토큰 예산 | round01b | GPU 티어 32K 문맥, 도구 출력 상한(응답당 12,000자) |`
-   후: `| 조사 1건의 문맥·토큰 예산 | round01b — 결정: 도구 호출 6번, 마지막 요청의 입력 토큰 26,000 | GPU 티어 32K 문맥에 진단 요청까지 들어가는 크기(도구 출력 상한 응답당 12,000자). 실측 조사 1건은 도구 2~3번, 모델 호출 4~5번 |`
+1. 머리말 「바뀐 이력」 끝
+
+   전:
+
+   ```text
+   round01을 round01a·round01b로 나눔. 근거: `docs/superpowers/specs/2026-11-11-round01a-kind-mcp-read-design.md` §3.
+   ```
+
+   후:
+
+   ```text
+   round01을 round01a·round01b로 나눔. 근거: `docs/superpowers/specs/2026-11-11-round01a-kind-mcp-read-design.md` §3. 2026-11-16(round01b) — 기본 LLM을 회사 GPU의 Gemma로 바꿈(사용자 결정 — Gemini는 회사망 밖의 대체·평가 비교 기준), Gemini 모델과 조사 예산을 정함(§10), Gemini 3의 도구 호출 서명을 `llm.py`가 되돌려 줌. 근거: `docs/superpowers/specs/2026-11-16-round01b-agent-llm-eval-design.md`.
+   ```
+
+2. §2 클라우드 LLM 행
+
+   전:
+
+   ```text
+   Gemini — round01~02는 Google AI Studio 무료 등급 키(결제 미연결), round03부터 Vertex AI |
+   ```
+
+   후:
+
+   ```text
+   Gemini — round01~02는 Google AI Studio 무료 등급 키(결제 미연결), round03부터 Vertex AI. 기본 LLM은 회사 GPU의 Gemma이고 Gemini는 회사망 밖에서의 대체이자 평가의 비교 기준이다(2026-11-16) |
+   ```
+
+3. §2 온프레미스 LLM 행 이유 칸
+
+   전:
+
+   ```text
+   | 요청 수 제한 없이 많이 부르는 일(조사 반복·평가)을 맡긴다 |
+   ```
+
+   후:
+
+   ```text
+   | 기본 LLM(2026-11-16) — 요청 수 제한이 없고 클러스터 데이터가 회사 밖으로 나가지 않는다 |
+   ```
+
+4. §2 실행 티어 행
+
+   전:
+
+   ```text
+   GPU 티어(회사 GPU 서버의 k3s, 역할별 모델 기본값은 triage만 Gemma·나머지 Gemini) / 로컬 티어(개발 PC의 kind, GPU 없음, 모든 역할이 Gemini 무료 등급)
+   ```
+
+   후:
+
+   ```text
+   GPU 티어(회사 GPU 서버의 k3s, 모든 역할의 기본 모델은 온프레미스 Gemma) / 로컬 티어(개발 PC의 kind, GPU 없음 — LLM은 회사망 안이면 GPU 서버의 Gemma, 밖이면 Gemini 무료 등급)
+   ```
+
+5. §3 배치 표 개발 PC 행
+
+   전:
+
+   ```text
+   데모 앱·MCP 서버·에이전트(Gemini 무료 등급), 통합 테스트 |
+   ```
+
+   후:
+
+   ```text
+   데모 앱·MCP 서버·에이전트(LLM은 회사망 안이면 Gemma, 밖이면 Gemini 무료 등급), 통합 테스트 |
+   ```
+
+6. §3 실행 티어 문단
+
+   전:
+
+   ```text
+   로컬 티어(개발 PC의 kind, GPU 없음, LLM은 Gemini 무료 등급)
+   ```
+
+   후:
+
+   ```text
+   로컬 티어(개발 PC의 kind, GPU 없음, LLM은 회사망 안이면 GPU 서버의 Gemma, 밖이면 Gemini 무료 등급)
+   ```
+
+7. §4 에이전트 그림 supervisor 줄
+
+   전:
+
+   ```text
+     → supervisor        [클라우드 Gemini]  조사 계획, 서브에이전트 배정
+   ```
+
+   후:
+
+   ```text
+     → supervisor        [온프레미스 Gemma]  조사 계획, 서브에이전트 배정
+   ```
+
+8. §4 모델 분업
+
+   전:
+
+   ```text
+   - **모델 분업**: GPU 티어의 기본은 triage만 온프레미스 Gemma, 계획·진단·추출은 클라우드 Gemini(로컬 티어는 모두 Gemini). Gemma가 처음 계획보다 커졌으므로 round01b부터 같은 시나리오를 두 모델로 돌려 비교하고, 분업 비율은 round07 라우팅 실험에서 정한다. 두 쪽 다 OpenAI 호환 API라 같은 클라이언트 코드로 부른다.
+   ```
+
+   후:
+
+   ```text
+   - **모델 분업**: 기본은 모든 역할이 온프레미스 Gemma다(사용자 결정 2026-11-16 — 요청 한도가 없고 클러스터 데이터가 회사 밖으로 나가지 않는다). Gemini는 회사 GPU에 닿지 않을 때(저장소를 클론한 사람, GKE에서 회사 서버에 연결하지 못할 때)의 대체이자 평가의 비교 기준이다. round01b부터 같은 시나리오를 두 모델로 돌려 비교하고, Gemma가 기준에 못 미치는 역할을 Gemini로 돌릴지는 round07 라우팅 실험에서 정한다. 두 쪽 다 OpenAI 호환 API라 같은 클라이언트 코드로 부른다(Gemini 3가 도구 호출마다 붙이는 `thought_signature`를 다음 요청에 되돌려 주는 작은 확장만 `llm.py`에 둔다).
+   ```
+
+9. §5 지식 층
+
+   전:
+
+   ```text
+   클라우드 Gemini가 기본, 회사 GPU의 Gemma와 비교해 round05에서 정한다
+   ```
+
+   후:
+
+   ```text
+   회사 GPU의 Gemma가 기본, Gemini와 비교해 round05에서 정한다
+   ```
+
+10. §7 round01b 행
+
+   전:
+
+   ```text
+   | round01b | 끝-끝 경로: 단일 LangGraph 에이전트 + LLM 두 종(Gemini 무료 등급·회사 GPU의 Gemma, 클러스터는 로컬 티어 kind), 평가 러너 v0 | 시나리오 2종을 러너로 돌려 원인 라벨을 맞힘, 두 모델의 정확도·속도·도구 호출 실패율 비교 |
+   ```
+
+   후:
+
+   ```text
+   | round01b | 끝-끝 경로: 직접 짠 LangGraph 단일 에이전트(MCP `k8s-read` 도구, 조사 예산) + LLM 두 종(기본 회사 GPU의 Gemma, 비교 기준 Gemini 무료 등급 Flash-Lite, 클러스터는 로컬 티어 kind), 평가 러너 v0(새 멤버 `eval`) | Gemma 시나리오 2종 × 3회와 Gemini 시나리오마다 1회의 결과표 — 원인 라벨 정답률·근거 인용률·도구 호출 수·시간·토큰·형식이 깨진 도구 호출 |
+   ```
+
+11. §7 round03 행 완료 기준
+
+   전:
+
+   ```text
+   GKE의 에이전트가 Gemini로 조사한다(연결이 되면 회사 서버의 vLLM도 부른다) |
+   ```
+
+   후:
+
+   ```text
+   GKE의 에이전트가 조사한다 — 회사 서버의 vLLM(Gemma)에 연결되면 그것을, 안 되면 Gemini(Vertex AI)를 쓴다 |
+   ```
+
+12. §10 Gemini 모델 행
+
+   전:
+
+   ```text
+   | Gemini 모델 이름(무료 등급) | round01b | 무료 등급 요청 한도, 도구 호출 품질 |
+   ```
+
+   후:
+
+   ```text
+   | Gemini 모델 이름(무료 등급) | round01b — 결정: `gemini-3.5-flash-lite`(`HOA_GEMINI_MODEL`로 바꾼다) | 2026-11-16 실측 — 3.5 Flash는 무료 등급 하루 20회에 조사 1건 약 200초, 3.8·3.7 Flash는 503·시간 초과, 2.5 Flash는 404. 3.5 Flash-Lite는 같은 조사를 26초에 맞혔다 |
+   ```
+
+13. §10 예산 행
+
+   전:
+
+   ```text
+   | 조사 1건의 문맥·토큰 예산 | round01b | GPU 티어 32K 문맥, 도구 출력 상한(응답당 12,000자) |
+   ```
+
+   후:
+
+   ```text
+   | 조사 1건의 문맥·토큰 예산 | round01b — 결정: 도구 호출 6번, 마지막 요청의 입력 토큰 26,000 | GPU 티어 32K 문맥에 진단 요청까지 들어가는 크기(도구 출력 상한 응답당 12,000자). 실측 조사 1건은 도구 2~3번, 모델 호출 4~5번 |
+   ```
 
 - [ ] **Step 6: 코딩 표준 네 곳**
 
-1. 「외부 호출 격리」 첫 항목 끝 — 전: `그래프 노드·도구 코드가 HTTP 클라이언트를 직접 만들지 않는다.`
-   후: ``그래프 노드·도구 코드가 HTTP 클라이언트를 직접 만들지 않는다. 엔드포인트마다 다른 점(Gemini 3가 도구 호출에 붙이는 `thought_signature`를 다음 요청에 되돌려 주기 등)도 `llm.py`가 흡수한다.``
-2. 「타입·데이터」 네트워크 I/O 항목 바로 아래에 새 항목 — ``- 하위 프로세스(`kubectl`·`hoa` CLI)를 하나씩 차례로 부르는 도구(평가 러너)는 동기 `subprocess.run`을 쓰고 컨텍스트·제한 시간·`encoding="utf-8"`을 명시한다. 하위 프로세스로 JSON을 넘기는 CLI는 표준출력을 UTF-8로 고정한다(`docs/ops/recurring-gotchas.md` 8번).``
-3. 「에러 처리」 구조화 출력 항목 바로 아래에 새 항목 — `- CLI 종료 코드: 0 성공, 1 실행 실패, 2 설정·사용법 오류, 3 LLM 요청 한도. 평가 러너는 3을 보고 남은 회차를 멈춘다.`
-4. 「테스트」 가짜 LLM 항목 끝 — 전: `- LLM은 결정적 응답을 내는 가짜 구현으로 바꿔 끼운다. mock 범위는 외부 호출로만 한정한다.`
-   후: ``- LLM은 결정적 응답을 내는 가짜 구현으로 바꿔 끼운다. mock 범위는 외부 호출로만 한정한다. 채팅 모델은 `BaseChatModel`을 상속한 대본 모델(`agent/tests/conftest.py`의 `ScriptedChatModel` — 정해 둔 `AIMessage`를 차례로 내고 `bind_tools`·`with_structured_output`을 흉내 낸다)로, OpenAI 호환 HTTP 계층은 httpx `MockTransport`로 바꾼다.``
+1. 「외부 호출 격리」 첫 항목 끝
+
+   전:
+
+   ```text
+   그래프 노드·도구 코드가 HTTP 클라이언트를 직접 만들지 않는다.
+   ```
+
+   후:
+
+   ```text
+   그래프 노드·도구 코드가 HTTP 클라이언트를 직접 만들지 않는다. 엔드포인트마다 다른 점(Gemini 3가 도구 호출에 붙이는 `thought_signature`를 다음 요청에 되돌려 주기 등)도 `llm.py`가 흡수한다.
+   ```
+
+2. 「타입·데이터」 네트워크 I/O 항목 아래
+
+   전:
+
+   ```text
+   - 네트워크 I/O(LLM·MCP·DB·HTTP·k8s API)는 `async def`로 쓴다. CLI 진입점(`main`)은 동기로 두고 필요하면 `asyncio.run`으로 감싼다.
+   ```
+
+   후:
+
+   ```text
+   - 네트워크 I/O(LLM·MCP·DB·HTTP·k8s API)는 `async def`로 쓴다. CLI 진입점(`main`)은 동기로 두고 필요하면 `asyncio.run`으로 감싼다.
+   - 하위 프로세스(`kubectl`·`hoa` CLI)를 하나씩 차례로 부르는 도구(평가 러너)는 동기 `subprocess.run`을 쓰고 컨텍스트·제한 시간·`encoding="utf-8"`을 명시한다. 하위 프로세스로 JSON을 넘기는 CLI는 표준출력을 UTF-8로 고정한다(`docs/ops/recurring-gotchas.md` 8번).
+   ```
+
+3. 「에러 처리」 구조화 출력 항목 아래
+
+   전:
+
+   ```text
+   - LLM 구조화 출력이 스키마를 어기면 기본값으로 조용히 메우지 않는다 — 재시도하거나 실패로 드러낸다.
+   ```
+
+   후:
+
+   ```text
+   - LLM 구조화 출력이 스키마를 어기면 기본값으로 조용히 메우지 않는다 — 재시도하거나 실패로 드러낸다.
+   - CLI 종료 코드: 0 성공, 1 실행 실패, 2 설정·사용법 오류, 3 LLM 요청 한도. 평가 러너는 3을 보고 남은 회차를 멈춘다.
+   ```
+
+4. 「테스트」 가짜 LLM 항목
+
+   전:
+
+   ```text
+   - LLM은 결정적 응답을 내는 가짜 구현으로 바꿔 끼운다. mock 범위는 외부 호출로만 한정한다.
+   ```
+
+   후:
+
+   ```text
+   - LLM은 결정적 응답을 내는 가짜 구현으로 바꿔 끼운다. mock 범위는 외부 호출로만 한정한다. 채팅 모델은 `BaseChatModel`을 상속한 대본 모델(`agent/tests/conftest.py`의 `ScriptedChatModel` — 정해 둔 `AIMessage`를 차례로 내고 `bind_tools`·`with_structured_output`을 흉내 낸다)로, OpenAI 호환 HTTP 계층은 httpx `MockTransport`로 바꾼다.
+   ```
 
 - [ ] **Step 7: 반복 함정 7~11번**
 
@@ -3929,7 +4552,7 @@ HOA_GEMMA_BASE_URL=
 - **날짜**: 2026-11-16 (round01b)
 - **증상**: 몇 번 잘 되던 호출이 `429 RESOURCE_EXHAUSTED — Quota exceeded for metric generate_content_free_tier_requests, limit: 20 ... Please retry in 2h30m`으로 막힌다. `gemini-3.5-flash`는 내부적으로 다른 버전(`gemini-3.6-flash`)의 한도로 센다.
 - **원인**: 무료 등급 한도는 모델마다 분당·하루 요청 수로 따로 있고, 하루 한도는 태평양 시간 자정에 초기화된다. 모델별 값은 문서에 없고 AI Studio(로그인)의 rate-limit 화면에만 있다. 조사 1건이 모델을 네댓 번 부르므로 하루 20회 모델은 조사 네 번이면 끝난다. 클라이언트 재시도(`max_retries`)로는 풀리지 않는다.
-- **해결**: 기본 모델을 같은 조사를 빠르게 맞힌 `gemini-3.5-flash-lite`로 두고, `hoa investigate`는 한도 오류에 종료 코드 3을 낸다. `hoa-eval run`은 3을 보면 남은 회차를 멈추고, 다음 날 남은 시나리오만 `--scenario`로 다시 돌려 `report`로 합친다.
+- **해결**: 기본 LLM을 요청 한도가 없는 회사 GPU의 Gemma로 두고(평가에서 Gemini는 시나리오마다 1회 비교 기준만), Gemini 프로필의 기본 모델은 같은 조사를 빠르게 맞힌 `gemini-3.5-flash-lite`로 둔다. `hoa investigate`는 한도 오류에 종료 코드 3을 내고, `hoa-eval run`은 3을 보면 남은 회차를 멈춘다 — 한도가 풀린 뒤 남은 시나리오만 `--scenario`로 다시 돌려 `report`로 합친다.
 - **재발 방지**: 프로브·실험도 한도에 들어간다 — 평가를 돌릴 날에는 같은 모델로 따로 시험하지 않는다.
 
 ## 11. `rollout status`가 끝나도 종료 중인 옛 파드가 남는다
@@ -3949,8 +4572,17 @@ Expected: `3`
 Run: `grep -c '기존 시스템·서버 설정을 바꾸는\|LLM(round01b)' GIT_WORKFLOW.md`
 Expected: `2`
 
-Run: `grep -c 'gemini-3.5-flash-lite\|마지막 요청의 입력 토큰 26,000\|thought_signature' docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md`
-Expected: `3`(모델 분업 줄·§10 두 행 — 줄 단위로 센다)
+Run: `grep -c 'GPU 티어의 Gemma(vLLM)이고\|평가의 비교 기준 |' README.md`
+Expected: `2`
+
+Run: `grep -c 'Gemma가 기본, Gemini와 비교\|모든 역할이 온프레미스 Gemma다\|모든 역할의 기본 모델은 온프레미스 Gemma\|\[온프레미스 Gemma\]  조사 계획\|gemini-3.5-flash-lite\|마지막 요청의 입력 토큰 26,000' docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md`
+Expected: `6`
+
+Run: `grep -c '나머지 Gemini\|모든 역할이 Gemini\|\[클라우드 Gemini\]\|클라우드 Gemini가 기본' docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md`
+Expected: `0` — Gemini를 기본으로 전제한 문장이 남지 않았다
+
+Run: `grep -c 'ScriptedChatModel\|CLI 종료 코드\|encoding="utf-8"' docs/standards/coding-standard.md`
+Expected: `3`
 
 Run: `grep -c '^## ' docs/ops/recurring-gotchas.md`
 Expected: `11`
@@ -3959,7 +4591,7 @@ Expected: `11`
 
 ```bash
 git add .env.example CLAUDE.md GIT_WORKFLOW.md README.md docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md docs/standards/coding-standard.md docs/ops/recurring-gotchas.md
-git commit -m "[Docs] round01b 문서 — CLAUDE.md 보완 3곳(승인 문구), .env 실행법, 전체 설계 결정 반영, 코딩 표준, 반복 함정 7~11"
+git commit -m "[Docs] round01b 문서 — CLAUDE.md 보완 3곳(승인 문구), 기본 LLM을 Gemma로(전체 설계·README·GIT_WORKFLOW), .env 실행법, 코딩 표준, 반복 함정 7~11"
 git push
 ```
 
@@ -3968,23 +4600,23 @@ Expected: 세 잡 success
 
 ---
 
-### Task 17: 수동 스모크 — 두 모델로 손 조사 한 번씩
+### Task 17: 수동 스모크 — 기본(Gemma) 조사와 Gemini 한 번
 
 **Files:** 없음(확인만)
 
-LLM을 실제로 부르는 단계다. Gemini 무료 등급 하루 한도를 아끼려고 Gemini는 한 번만 부른다(조사 1건 ≈ 요청 4~5회).
+LLM을 실제로 부르는 단계다. 손 확인은 기본 모델(Gemma)로 하고, Gemini는 도구 호출 서명 처리를 실제 엔드포인트로 확인하는 한 번만 부른다(조사 1건 ≈ 요청 4~5회).
 
 - [ ] **Step 1: 장애를 심는다**
 
 Run: `bash scripts/dev-cluster.sh mcp-kubeconfig && bash scripts/dev-cluster.sh fault image-pull && sleep 20 && kubectl --context kind-hoa -n demo get pods`
 Expected: 새 orders 파드가 `ErrImagePull` 또는 `ImagePullBackOff`, 옛 orders 파드는 Running.
 
-- [ ] **Step 2: Gemma로 조사**
+- [ ] **Step 2: 기본 모델(Gemma)로 조사**
 
-Run: `uv run --env-file .env hoa investigate --model gemma "KubeDeploymentRolloutStuck — namespace=demo deployment=orders: rollout has not progressed" > /dev/null; echo "exit=$?"`
-Expected: 표준오류에 `원인: image_pull_error`, `대상: demo/orders`, 한국어 요약, 근거 인용, `조사: 도구 N번 …`. `exit=0`. 수 초 안에 끝난다.
+Run: `uv run --env-file .env hoa investigate "KubeDeploymentRolloutStuck — namespace=demo deployment=orders: rollout has not progressed" > /dev/null; echo "exit=$?"`
+Expected: `--model`을 주지 않아도 Gemma로 돈다. 표준오류에 `원인: image_pull_error`, `대상: demo/orders`, 한국어 요약, 근거 인용, `조사: 도구 N번 …`. `exit=0`. 수 초 안에 끝난다.
 
-- [ ] **Step 3: Gemini로 조사(JSON만)**
+- [ ] **Step 3: Gemini로 한 번(JSON만)**
 
 Run: `uv run --env-file .env hoa investigate --json --model gemini "KubeDeploymentRolloutStuck — namespace=demo deployment=orders: rollout has not progressed" | uv run python -c "import json, sys; d = json.load(sys.stdin); print(d['model'], d['diagnosis']['cause_label'], d['stop_reason'], len(d['steps']), d['invalid_tool_calls'])"`
 Expected: `gemini-3.5-flash-lite image_pull_error answered <도구 수> 0`. 400 `thought_signature` 오류가 나지 않는다(도구 호출 뒤 두 번째 요청이 성공했다는 뜻이다).
@@ -3994,8 +4626,8 @@ Expected: `gemini-3.5-flash-lite image_pull_error answered <도구 수> 0`. 400 
 Run: `bash scripts/dev-cluster.sh reset`
 Expected: 세 Deployment가 `successfully rolled out`.
 
-Run: `uv run hoa investigate --model gemini "x"; echo "exit=$?"`
-Expected: `--env-file` 없이 돌리면 `hoa: GEMINI_API_KEY is not set — …`, `exit=2`(셸에 키를 따로 export하지 않았을 때).
+Run: `uv run hoa investigate "x"; echo "exit=$?"`
+Expected: `--env-file` 없이 돌리면 `hoa: HOA_GEMMA_BASE_URL is not set — …`, `exit=2`(셸에 변수를 따로 export하지 않았을 때).
 
 ---
 
@@ -4038,11 +4670,11 @@ Expected: 세 잡 success
 
 ---
 
-### Task 19: 실제 평가 — 시나리오 2종 × 모델 2종 × 3회
+### Task 19: 실제 평가 — Gemma 시나리오 2종 × 3회, Gemini 기준점 1회씩
 
 **Files:** 없음(결과 원본은 `eval/results/`에 남고 커밋하지 않는다)
 
-spec 완료 기준 1·2다. Gemini 무료 등급은 모델마다 하루 요청 수 한도가 있다(반복 함정 10번). 6회는 요청 약 30번이므로 한 번에 다 못 돌 수 있다 — 러너가 종료 코드 3으로 멈추면 다음 날(태평양 시간 자정 = 한국 시간 17시 뒤) 남은 회차만 돌리고 `report`로 합친다. 이 Task를 하는 날에는 Gemini로 따로 시험하지 않는다.
+spec 완료 기준 1·2다. 본 평가는 기본 모델 Gemma로 하고, Gemini는 시나리오마다 1회(요청 약 10번)만 비교 기준으로 돌린다. Gemini 무료 등급은 모델마다 하루 요청 수 한도가 있다(반복 함정 10번) — 한도에 걸려 러너가 종료 코드 3으로 멈추면 한도가 풀린 뒤(태평양 시간 자정 = 한국 시간 17시) 남은 시나리오만 다시 돌리고 `report`로 합친다.
 
 - [ ] **Step 1: 준비**
 
@@ -4051,23 +4683,24 @@ Expected: 새 12시간 토큰, 세 파드 Running(장애 없음).
 
 - [ ] **Step 2: Gemma 6회**
 
-Run: `uv run --env-file .env hoa-eval run --model gemma --repeat 3`
+Run: `uv run --env-file .env hoa-eval run --repeat 3`
 Expected: 표준오류에 회차마다 `<시나리오> #<회차>: 맞음|틀림|<오류>`, 끝에 요약 표와 `결과: eval/results/<시각>-gemma.jsonl`. 종료 코드 0. 회차당 1~2분(대부분 증상 대기와 복구).
 
-- [ ] **Step 3: Gemini 6회**
+- [ ] **Step 3: Gemini 2회(시나리오마다 1회)**
 
-Run: `uv run --env-file .env hoa-eval run --model gemini --repeat 3; echo "exit=$?"`
-Expected: `exit=0`이면 끝. `exit=3`이면 한도에 걸린 것이다 — 결과 파일의 회차별 표(`uv run hoa-eval report eval/results/*-gemini.jsonl`)로 빠진 (시나리오, 회차)를 확인하고, 한도가 풀린 뒤 빠진 시나리오만 `--scenario <이름> --repeat <남은 횟수>`로 다시 돌린다(한도에 걸린 회차는 「실패」로 표에 남는다 — 완료노트에는 다시 돌린 결과로 6회를 채우고 한도로 멈춘 사실을 적는다).
+Run: `uv run --env-file .env hoa-eval run --model gemini --repeat 1; echo "exit=$?"`
+Expected: `exit=0`. `exit=3`이면 한도에 걸린 것이다 — 한도가 풀린 뒤 빠진 시나리오만 `--scenario <이름>`으로 다시 돌린다(한도에 걸린 회차는 「실패」로 표에 남는다 — 완료노트에는 다시 돌린 결과를 쓰고 한도로 멈춘 사실을 적는다).
 
 - [ ] **Step 4: 결과표**
 
 Run: `uv run hoa-eval report eval/results/*.jsonl`
-Expected: 요약 표 네 행(시나리오 2 × 모델 2)과 회차별 표 12행 이상. 완료노트 「수치」(Task 21)에 그대로 옮긴다.
+Expected: 요약 표 네 행(시나리오 2 × 모델 2)과 회차별 표 8행 이상. 완료노트 「수치」(Task 21)에 그대로 옮긴다.
 
 완료 기준 확인:
-- Gemini(`gemini-3.5-flash-lite`)가 두 시나리오 모두 「원인 정답」 2/3 이상.
-- Gemma는 결과를 그대로 기록한다. 2/3 미만이면 회차별 결과 원본(`report` 필드의 도구 기록·진단)을 보고 원인(도구를 덜 불렀다, 인용을 지어냈다, 라벨을 헷갈렸다 등)을 완료노트 「수치」 아래에 적는다.
-- Gemini가 기준에 못 미치면 멈추고 사용자에게 보고한다(프롬프트·예산·모델 중 무엇을 바꿀지는 사용자와 정한다).
+- Gemma(`gemma4-26b-a4b`)가 두 시나리오 모두 「원인 정답」 2/3 이상.
+- Gemini(`gemini-3.5-flash-lite`)는 결과를 그대로 기록한다.
+- 기준에 못 미치거나 Gemini보다 눈에 띄게 낮은 쪽이 있으면 회차별 결과 원본(`report` 필드의 도구 기록·진단)을 보고 원인(도구를 덜 불렀다, 인용을 지어냈다, 라벨을 헷갈렸다 등)을 완료노트 「수치」 아래에 적는다.
+- Gemma가 기준에 못 미치면 멈추고 사용자에게 보고한다(프롬프트·예산·모델 중 무엇을 바꿀지는 사용자와 정한다).
 
 ---
 
@@ -4084,7 +4717,7 @@ Expected: 요약 표 네 행(시나리오 2 × 모델 2)과 회차별 표 12행 
 - [ ] **Step 1: `00-개요.md`**
 
 절 구성:
-- 「0. 사용자 프롬프트 (paraphrase)」 — round01의 뒤쪽으로, round01a가 세운 kind 클러스터·MCP 읽기 도구 위에 에이전트의 「머리」를 올린다. 회사 GPU의 Gemma와 무료 Gemini 두 모델을 같은 장애로 비교하고, LangGraph·LangChain을 직접 다뤄 본 경험을 남기려고 그래프를 손으로 짜고 MCP 어댑터를 쓴다.
+- 「0. 사용자 프롬프트 (paraphrase)」 — round01의 뒤쪽으로, round01a가 세운 kind 클러스터·MCP 읽기 도구 위에 에이전트의 「머리」를 올린다. 회사 GPU의 Gemma를 기본으로 쓰고(무료·요청 한도 없음 — plan 검토 중 사용자 결정) 무료 Gemini를 비교 기준으로 같은 장애에 돌려 보며, LangGraph·LangChain을 직접 다뤄 본 경험을 남기려고 그래프를 손으로 짜고 MCP 어댑터를 쓴다.
 - 「1. 설계 요약」 — spec 링크, 그래프 그림(investigate → tools ↺ → diagnose), 예산(도구 6번·문맥 26K)과 계산 근거, `Diagnosis` 스키마, 두 모델 설정 묶음, 평가 러너 흐름(복구 → 주입 → 대기 → 조사 → 채점 → 복구), 멤버 경계(러너가 에이전트를 하위 프로세스로 부르는 이유), plan을 쓰며 바뀐 것(Flash-Lite, thought_signature, 문맥 크기, ExceptionGroup, UTF-8, 종료 파드 대기, 인용 정규화).
 - 「2. 개념 입문」 — 개념마다 쉬운 정의 2~4문장 + 「**여기서는**:」 이 저장소에서 쓴 곳. 다음 16개를 이 순서로:
   1. LLM 에이전트와 ReAct 패턴 — 생각 → 도구 → 관찰의 반복, 언제 멈추나.
@@ -4104,8 +4737,8 @@ Expected: 요약 표 네 행(시나리오 2 × 모델 2)과 회차별 표 12행 
   15. 하위 프로세스와 문자 인코딩 — 종료 코드 계약, Windows 파이프의 로캘 인코딩, UTF-8 고정.
   16. `.env`와 비밀값·무료 등급 한도 — `uv run --env-file`, `SecretStr`, 모델별 하루 요청 수 한도.
 - 「3. 구현」 — 세 파일로 나눴다는 안내와 파일별 수록 목록 표.
-- 「4. 검증」 — 실제로 돌린 명령과 결과: `uv run pytest -q`(178 passed, 8 deselected), `uv run pytest -m integration`(8 passed), 수동 스모크(Task 17), 실제 평가 결과표(Task 19), `uv run python scripts/check_guide.py docs/guides/round01b/`, CI 세 잡.
-- 「5. 면접식 Q&A」 — 12문항 이상. 다룰 것: `create_react_agent` 대신 그래프를 직접 짠 이유 / MCP SDK 대신 `langchain-mcp-adapters`를 쓴 이유와 대가(`mcp<2` 고정) / 조사와 진단을 노드로 나눈 이유(구조화 출력과 도구 호출을 한 번에 시키지 않는 이유) / 예산 수치의 계산 / 건너뛴 도구 호출에 답을 붙이는 이유 / 스키마 위반을 기본값으로 메우지 않는 이유 / Gemini 3 thought_signature 문제를 어떻게 찾고 왜 하위 클래스로 풀었나(대안: langchain-google-genai) / MCP 서버에 API 키를 넘기지 않는 방법 / 러너가 에이전트를 import하지 않고 하위 프로세스로 부르는 이유 / 채점을 LLM이 아닌 규칙으로 한 이유와 인용 정규화의 위험(느슨함) / temperature 0인데 3번 돌리는 이유 / 무료 등급 하루 한도에 맞춘 설계(종료 코드 3, report 합치기) / 두 모델 결과를 어떻게 읽나(Task 19 결과).
+- 「4. 검증」 — 실제로 돌린 명령과 결과: `uv run pytest -q`(179 passed, 8 deselected), `uv run pytest -m integration`(8 passed), 수동 스모크(Task 17), 실제 평가 결과표(Task 19), `uv run python scripts/check_guide.py docs/guides/round01b/`, CI 세 잡.
+- 「5. 면접식 Q&A」 — 12문항 이상. 다룰 것: `create_react_agent` 대신 그래프를 직접 짠 이유 / MCP SDK 대신 `langchain-mcp-adapters`를 쓴 이유와 대가(`mcp<2` 고정) / 조사와 진단을 노드로 나눈 이유(구조화 출력과 도구 호출을 한 번에 시키지 않는 이유) / 예산 수치의 계산 / 건너뛴 도구 호출에 답을 붙이는 이유 / 스키마 위반을 기본값으로 메우지 않는 이유 / Gemini 3 thought_signature 문제를 어떻게 찾고 왜 하위 클래스로 풀었나(대안: langchain-google-genai) / MCP 서버에 API 키를 넘기지 않는 방법 / 러너가 에이전트를 import하지 않고 하위 프로세스로 부르는 이유 / 채점을 LLM이 아닌 규칙으로 한 이유와 인용 정규화의 위험(느슨함) / temperature 0인데 3번 돌리는 이유 / 무료 등급 하루 한도에 맞춘 설계(종료 코드 3, report 합치기) / Gemma를 기본으로 하고 Gemini를 비교 기준으로 둔 이유(한도·데이터 경계·비용, 기준점 1회의 한계) / 두 모델 결과를 어떻게 읽나(Task 19 결과).
 
 - [ ] **Step 2: 구현 파일 셋**
 
@@ -4156,7 +4789,7 @@ plan: `docs/superpowers/plans/2026-11-16-round01b-agent-llm-eval.md`
 
 ## 한 일
 - 에이전트(`agent`): 손으로 짠 LangGraph `StateGraph`(investigate → tools ↺ → diagnose), 조사 예산(도구 6번·문맥 26K 토큰), 구조화 진단(`Diagnosis` — 원인 라벨 7개·대상·근거 인용·확신도·한국어 요약), `hoa investigate` CLI(JSON·요약·종료 코드 0·1·2·3).
-- LLM 두 종(`llm.py`): Gemini 무료 등급 `gemini-3.5-flash-lite`와 GPU 티어 vLLM `gemma4-26b-a4b`를 같은 OpenAI 호환 클라이언트로. Gemini 3의 도구 호출 서명(`thought_signature`)을 되돌려 주는 `ChatOpenAICompat`.
+- LLM 두 종(`llm.py`): 기본은 GPU 티어 vLLM `gemma4-26b-a4b`, 비교 기준·회사망 밖 대체는 Gemini 무료 등급 `gemini-3.5-flash-lite` — 같은 OpenAI 호환 클라이언트로. Gemini 3의 도구 호출 서명(`thought_signature`)을 되돌려 주는 `ChatOpenAICompat`.
 - MCP 연결: `langchain-mcp-adapters`로 `hoa-mcp-k8s-read`를 stdio로 — 서버 프로세스에 자기 설정만 넘긴다.
 - 평가 러너 v0(새 멤버 `eval`): 시나리오 YAML 2종(장애 대상의 정본), 주입 → 증상 대기 → 조사(하위 프로세스) → 규칙 채점 → 복구, `hoa-eval run`·`report`.
 - 테스트: 단위 178개(대본 모델·가짜 kubectl·`MockTransport`), kind 통합 8개(에이전트 배선·러너 추가). CI 변경 없음 — 새 멤버 테스트가 기존 잡에서 돈다.
@@ -4166,7 +4799,8 @@ plan: `docs/superpowers/plans/2026-11-16-round01b-agent-llm-eval.md`
 ## 결정
 - 그래프는 `create_react_agent` 대신 직접 짰다 — 노드·엣지·상태를 손으로 다뤄 보려는 학습 목적(사용자 결정 2026-11-16).
 - MCP 연결은 `langchain-mcp-adapters` — LangChain 생태계 경험(사용자 결정). 대가로 MCP SDK는 1.x(`mcp<2`)에 묶인다.
-- Gemini 기본 모델은 `gemini-3.5-flash-lite` — 3.5 Flash는 하루 20회·조사 1건 약 200초라 평가 12회를 하루에 못 돈다(반복 함정 10번).
+- 기본 LLM은 회사 GPU의 Gemma — 요청 한도가 없고 클러스터 데이터가 회사 밖으로 나가지 않는다(사용자 결정, plan 검토 중 2026-11-16). 평가에서 Gemini는 시나리오마다 1회 비교 기준만 돌렸고, 전체 설계의 모델 분업도 「기본 Gemma」로 바꿨다(분업 비율은 round07 라우팅 실험).
+- Gemini 프로필의 기본 모델은 `gemini-3.5-flash-lite` — 3.5 Flash는 하루 20회·조사 1건 약 200초였다(반복 함정 10번).
 - Gemini 3의 `thought_signature`는 `ChatOpenAI` 하위 클래스로 보존했다 — `langchain-google-genai`로 바꾸면 클라이언트가 둘이 된다(코딩 표준 「LLM은 한 클라이언트를 설정으로」). 비공개 메서드 재정의라 `MockTransport` 테스트로 지킨다.
 - 토큰 예산은 「마지막 요청의 입력 토큰」(= 문맥 크기)으로 센다.
 - 채점은 규칙으로만 — 인용 확인은 따옴표·백슬래시·공백 차이를 무시한다(지어낸 인용은 여전히 걸린다).
@@ -4186,7 +4820,7 @@ plan: `docs/superpowers/plans/2026-11-16-round01b-agent-llm-eval.md`
 - round02: MCP 서버·에이전트를 GPU 티어 k3s 안으로(Helm), 기존 Gemma vLLM을 k3s 관리로, 임베딩 모델, round01a 이월분(Helm `templates/` check-yaml 제외, `k3s.yaml` 무시, SOPS 예외 규칙, helm 버전 고정, kubeconform).
 - round04: Langfuse(OpenTelemetry) 추적, Alertmanager 웹훅으로 경보 받기 — 지금의 경보 문장을 실제 경보로.
 - round06: supervisor·서브에이전트, Postgres 체크포인트, 사람 승인, 쓰기 도구.
-- round07: 시나리오 확장(oom·probe·selector·downstream — 라벨은 이미 있다), 프롬프트 인젝션 시나리오, triage 분업과 라우팅 실험(3.5 Flash와 Flash-Lite 비교 포함).
+- round07: 시나리오 확장(oom·probe·selector·downstream — 라벨은 이미 있다), 프롬프트 인젝션 시나리오, 라우팅 실험(기본 Gemma가 기준에 못 미치는 역할만 Gemini로 돌릴지 — Gemini 3.5 Flash와 Flash-Lite 비교 포함).
 - `langchain-openai`를 올릴 때 `ChatOpenAICompat`의 재정의 메서드를 확인한다(서명 테스트가 먼저 깨진다). LangChain이 `extra_content`를 지원하면 하위 클래스를 지운다.
 
 ## 다음 라운드 진입점
@@ -4229,7 +4863,7 @@ Expected: 세 잡 success. 그 실행 번호를 완료노트 CI 줄에 적어 �
 
 - [ ] **Step 1: 브리핑과 승인 요청**
 
-push 전에 이번 라운드에서 만든 것과 개념을 사용자가 익힐 수 있게 브리핑한다(교본 「개념 입문」 요약, 평가 결과표 읽는 법, 직접 해 볼 명령: `fault image-pull` → `hoa investigate --model gemma` → `reset`, `hoa-eval report`). 그다음 `dev` 머지 승인을 받는다. 승인 전 머지 금지.
+push 전에 이번 라운드에서 만든 것과 개념을 사용자가 익힐 수 있게 브리핑한다(교본 「개념 입문」 요약, 평가 결과표 읽는 법, 직접 해 볼 명령: `fault image-pull` → `hoa investigate`(기본 Gemma) → `reset`, `hoa-eval report`). 그다음 `dev` 머지 승인을 받는다. 승인 전 머지 금지.
 
 - [ ] **Step 2: 머지·push**
 
