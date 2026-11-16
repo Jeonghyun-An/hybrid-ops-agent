@@ -117,7 +117,7 @@
 
 ### 5.4 MCP `k8s-read` 서버 — 새 멤버 `mcp_servers`
 
-- 패키지 `hoa-mcp`, import 이름 `hoa_mcp`, 이 서버는 `hoa_mcp.k8s_read`. 공식 MCP Python SDK의 FastMCP로 만들고, 쿠버네티스 API는 `kubernetes_asyncio`로 비동기 호출한다(코딩 표준).
+- 패키지 `hoa-mcp`, import 이름 `hoa_mcp`, 이 서버는 `hoa_mcp.k8s_read`. 공식 MCP Python SDK 1.x(`mcp>=1.30,<2`)의 FastMCP로 만들고, 쿠버네티스 API는 `kubernetes_asyncio`로 비동기 호출한다(코딩 표준). SDK 2.x는 FastMCP를 MCPServer로 바꿨지만, round01b에서 쓸 `langchain-mcp-adapters`(0.3.2)가 `mcp<2`만 지원하고 워크스페이스는 잠금 파일 하나를 함께 쓰므로 1.x로 고정한다(plan 작성 중 확인, 2026-11-11).
 - 실행 방식 — 세 안을 비교해 A로 정했다.
 
 | 안 | 내용 | 장점 | 단점 |
@@ -145,14 +145,14 @@
 ### 5.5 RBAC와 자격 증명
 
 - Namespace `hoa-system`에 ServiceAccount `hoa-mcp-read`를 둔다.
-- ClusterRole `hoa-k8s-read`: `get`·`list`·`watch` — `pods`, `pods/log`, `events`(core와 `events.k8s.io`), `deployments`, `replicasets`, `services`, `endpointslices`. Secret·ConfigMap은 넣지 않고 `*`도 쓰지 않는다.
+- ClusterRole `hoa-k8s-read`: `get`·`list`·`watch` — 도구가 실제로 읽는 `pods`, `pods/log`, `events`(core), `deployments`, `replicasets`만 둔다. Service·EndpointSlice는 그것을 읽는 도구(Service 셀렉터 장애)가 들어올 때 더한다. Secret·ConfigMap은 넣지 않고 `*`도 쓰지 않는다.
 - `demo` 네임스페이스의 RoleBinding으로 위 ClusterRole을 묶는다 — 권한 정의는 한 번(ClusterRole), 범위는 네임스페이스(RoleBinding)로 좁히는 쿠버네티스 관용 방식이다.
 - 토큰: `kubectl create token hoa-mcp-read -n hoa-system --duration=12h`로 만료가 있는 토큰을 받아 kubeconfig를 쓴다. 기본 경로는 저장소 밖 `~/.kube/hoa-kind-mcp-read.kubeconfig`(CI는 `$RUNNER_TEMP`), 파일 권한은 600이다. 저장소 안에 실수로 두더라도 `.gitignore`의 `*.kubeconfig`에 걸린다.
 
 ## 6. 테스트·CI
 
 - **단위 테스트**(기본 `pytest`):
-  - demo_app — 각 서비스의 응답, 하류 실패 시 502, 설정 검증 실패 시 종료 코드 1과 오류 로그. 하류 호출은 httpx `MockTransport`로 바꾼다.
+  - demo_app — 각 서비스의 응답, 하류 실패 시 502, 설정 검증 실패 시 종료 코드 1과 오류 로그. 앱은 httpx `ASGITransport`로 부르고(Starlette 1.x는 `TestClient`의 httpx 사용을 deprecated로 바꿨다), 하류는 실제 앱을 `ASGITransport`로 잇거나 `MockTransport`로 바꾼다.
   - mcp_servers — 변환 함수(대기 사유·재시작 수·conditions 추출), 비밀값 가리기, 출력 상한과 `truncated`, 허용 네임스페이스 거부. 쿠버네티스 응답은 `kubernetes_asyncio` 모델 객체로 만든 가짜를 쓴다.
 - **통합 테스트**(`integration` 마커, kind 필요):
   - 마커를 루트 `pyproject.toml`에 등록하고 기본 실행에서 뺀다(`addopts`에 `-m "not integration"`). `uv run pytest -m integration`으로 따로 돌린다.
@@ -163,7 +163,7 @@
   - 장애 주입·상태 대기는 관리자 컨텍스트로 하고, 도구 호출은 반드시 읽기 전용 kubeconfig로 한다. 테스트 코드의 관리자 클라이언트는 코딩 표준 「외부 호출 격리」(제품 코드 규칙)의 대상이 아니다.
 - **CI**(`.github/workflows/ci.yml`):
   - 린트·테스트 잡: 기존 단계 + shellcheck(`uv run pre-commit run shellcheck --all-files` — pre-commit과 같은 버전을 쓴다).
-  - 새 잡 「통합 테스트(kind)」: 고정 버전 kind를 내려받고 → `bash scripts/dev-cluster.sh up` → `uv run pytest -m integration`. 실패하면 진단 출력(`kubectl get pods,events -A`, `kind export logs`)을 남긴다. 제한 시간을 둔다. LLM·회사망·클라우드는 부르지 않는다.
+  - 새 잡 「통합 테스트(kind)」: 고정 버전 kind·kubectl을 내려받고 → `bash scripts/dev-cluster.sh up` → `uv run pytest -m integration`. 실패하면 진단 출력(`kubectl get pods,events -A`, `kind export logs`)을 남긴다. 제한 시간을 둔다. LLM·회사망·클라우드는 부르지 않는다.
 - pre-commit에 shellcheck 훅(shellcheck-py)을 더한다. `.sh`가 처음 생기는 라운드라, 검사는 그 파일 종류가 처음 생길 때 더한다는 원칙을 따른다.
 - kubeconform은 Helm과 함께 round02에 더한다. 이번 매니페스트는 CI가 실제 kind 클러스터에 적용하므로 스키마 검사보다 강한 검증을 받는다.
 - 루트 `pyproject.toml`의 다섯 곳을 새 멤버 둘만큼 고친다(코딩 표준 「패키지 경계」).
@@ -248,7 +248,7 @@ round00의 기록 문서(완료노트·plan·교본)는 그 라운드의 기록�
 
 | 위험 | 대응 |
 |---|---|
-| Git Bash가 `/`로 시작하는 인자를 Windows 경로로 바꾼다(MSYS 경로 변환) | 스크립트에서 `MSYS_NO_PATHCONV=1`을 쓰고, 개발 PC와 CI 둘 다에서 실행해 확인한다 |
+| Git Bash가 `/`로 시작하는 인자를 Windows 경로로 바꾼다(MSYS 경로 변환) | 스크립트가 저장소 루트로 옮겨 가 상대 경로만 쓴다 — 변환을 전역으로 끄면 `docker`·`kubectl`에 넘기는 절대 경로가 깨진다. 개발 PC와 CI 둘 다에서 실행해 확인한다 |
 | Windows에서 커밋한 `.sh`에 실행 비트가 없다 | `git update-index --chmod=+x`로 비트를 넣고, 호출은 문서·CI 모두 `bash scripts/dev-cluster.sh`로 한다 |
 | 셸 스크립트에 CRLF가 섞인다 | `.gitattributes`의 LF 고정(반복 함정 1번), shellcheck |
 | 장애 증상이 나타나는 시간이 일정하지 않다(CrashLoopBackOff는 10초·20초… 백오프) | 상태를 폴링하고 최대 120초로 제한한다. 실패하면 진단 출력을 남긴다 |
