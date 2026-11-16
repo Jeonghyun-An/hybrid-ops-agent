@@ -5,6 +5,7 @@ import yaml
 from pydantic import ValidationError
 
 from hoa_agent.diagnosis import CauseLabel, Diagnosis
+from hoa_agent.prompts import DIAGNOSE_PROMPT
 
 VALID = {
     "cause_label": "bad_config",
@@ -48,3 +49,9 @@ def test_eval_scenarios_only_expect_labels_the_agent_can_answer() -> None:
 
     assert expected
     assert expected <= {label.value for label in CauseLabel}
+
+
+def test_the_diagnosis_prompt_defines_every_label() -> None:
+    """라벨에 뜻이 없으면 모델이 근본 원인과 증상(프로브 실패) 사이에서 unknown으로 피한다."""
+    for label in CauseLabel:
+        assert f"  - {label.value}: " in DIAGNOSE_PROMPT
