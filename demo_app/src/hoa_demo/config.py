@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 from enum import StrEnum
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 
 class Role(StrEnum):
@@ -15,6 +15,15 @@ class DemoSettings(BaseModel):
     port: int = Field(ge=1, le=65535)
     orders_url: str | None = None
     inventory_url: str | None = None
+
+    @field_validator("orders_url", "inventory_url")
+    @classmethod
+    def http_url_without_trailing_slash(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("must start with http:// or https://")
+        return value.rstrip("/")
 
 
 class ConfigError(Exception):

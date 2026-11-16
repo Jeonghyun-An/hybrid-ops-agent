@@ -3,12 +3,11 @@
 # Dockerfile.dockerignore 를 같이 늘린다.
 FROM ghcr.io/astral-sh/uv:0.11.31 AS uv
 
-FROM python:3.12.16-slim-bookworm
+FROM python:3.12.16-slim-bookworm AS build
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
-    UV_PYTHON_DOWNLOADS=never \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    UV_NO_CACHE=1 \
+    UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY agent/pyproject.toml agent/
@@ -17,6 +16,12 @@ COPY mcp_servers/pyproject.toml mcp_servers/
 RUN uv sync --locked --package hoa-demo --no-dev --no-install-workspace
 COPY demo_app/src demo_app/src
 RUN uv sync --locked --package hoa-demo --no-dev --no-editable
-ENV PATH=/app/.venv/bin:$PATH
-USER 65532
+
+# 실행 이미지에는 가상환경만 옮긴다 — uv·소스·빌드 잔여물을 남기지 않는다.
+FROM python:3.12.16-slim-bookworm
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/app/.venv/bin:$PATH
+COPY --from=build /app/.venv /app/.venv
+USER 65532:65532
 CMD ["hoa-demo"]

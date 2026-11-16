@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 
@@ -6,6 +7,13 @@ from fastapi import FastAPI
 
 from hoa_demo import gateway, inventory, orders
 from hoa_demo.config import ConfigError, DemoSettings, Role, load_settings, require
+
+
+class SkipHealthChecks(logging.Filter):
+    """Keeps probe hits out of the access log so they do not push real clues out of the tail."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/healthz" not in record.getMessage()
 
 
 def build_app(settings: DemoSettings) -> FastAPI:
@@ -23,4 +31,5 @@ def main() -> None:
     except ConfigError as exc:
         print(f"hoa-demo: invalid configuration: {exc}", file=sys.stderr, flush=True)
         raise SystemExit(1) from exc
+    logging.getLogger("uvicorn.access").addFilter(SkipHealthChecks())
     uvicorn.run(app, host="0.0.0.0", port=settings.port, log_level="info")

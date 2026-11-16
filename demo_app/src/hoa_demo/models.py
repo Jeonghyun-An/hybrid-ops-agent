@@ -5,6 +5,10 @@ class Health(BaseModel):
     status: str = "ok"
 
 
+class ErrorBody(BaseModel):
+    detail: str
+
+
 class Order(BaseModel):
     order_id: int
     sku: str

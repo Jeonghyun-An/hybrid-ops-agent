@@ -4,6 +4,8 @@ from fastapi import FastAPI, HTTPException
 from hoa_demo.common import add_health, fetch
 from hoa_demo.models import Order, OrderDetail, Stock
 
+INVENTORY_TIMEOUT_SECONDS = 2.0
+
 ORDERS = {
     1: Order(order_id=1, sku="SKU-1", quantity=2),
     2: Order(order_id=2, sku="SKU-2", quantity=1),
@@ -20,7 +22,11 @@ def create_app(inventory_url: str, transport: httpx.AsyncBaseTransport | None = 
         if order is None:
             raise HTTPException(status_code=404, detail=f"unknown order: {order_id}")
         stock = await fetch(
-            Stock, f"{inventory_url}/stock/{order.sku}", service="inventory", transport=transport
+            Stock,
+            f"{inventory_url}/stock/{order.sku}",
+            service="inventory",
+            timeout=INVENTORY_TIMEOUT_SECONDS,
+            transport=transport,
         )
         return OrderDetail(order=order, stock=stock)
 

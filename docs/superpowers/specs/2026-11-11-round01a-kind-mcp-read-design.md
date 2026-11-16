@@ -94,7 +94,7 @@
 
 - 패키지 `hoa-demo`, import 이름 `hoa_demo`. FastAPI + httpx, 데이터는 메모리에 둔다.
 - 서비스 3개, 호출 흐름 `gateway → orders → inventory`:
-  - gateway `GET /api/orders/{order_id}` → orders `GET /orders/{order_id}` → inventory `GET /stock/{sku}`. gateway가 주문과 재고를 합쳐 돌려준다.
+  - gateway `GET /api/orders/{order_id}` → orders `GET /orders/{order_id}` → inventory `GET /stock/{sku}`. orders가 주문에 재고를 붙이고, gateway는 그 결과를 그대로 전한다. 하류 오류는 원인 서비스와 상세를 담아 위로 올라간다(예: `orders returned 502: inventory unreachable: ConnectError`).
   - 세 서비스 모두 `GET /healthz`를 둔다(readiness·liveness 프로브).
   - 하류 호출이 실패하면 gateway·orders는 502와 원인(어느 서비스, 어떤 오류)을 돌려준다.
 - 이미지 하나에 역할을 환경변수로 고른다 — `HOA_DEMO_ROLE`(gateway·orders·inventory), `HOA_DEMO_PORT`, 하류 주소(`HOA_DEMO_ORDERS_URL`, `HOA_DEMO_INVENTORY_URL`). 시작할 때 Pydantic 모델로 설정을 검증하고, 틀리면 무엇이 틀렸는지 한 줄 로그를 남기고 종료 코드 1로 끝난다 — 장애 `bad-config`의 단서가 된다.
