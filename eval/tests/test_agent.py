@@ -1,6 +1,9 @@
 import sys
 from collections.abc import Callable
 
+import pytest
+
+from hoa_eval import agent
 from hoa_eval.agent import AgentReport, run_agent
 
 
@@ -30,20 +33,29 @@ def test_failed_run_keeps_the_last_error_line() -> None:
 
     assert outcome.report is None
     assert outcome.error == "hoa: boom"
-    assert outcome.rate_limited is False
+    assert (outcome.rate_limited, outcome.setup_error) == (False, False)
 
 
-def test_exit_code_3_marks_a_rate_limit() -> None:
-    script = "print('hoa: rate limit', file=sys.stderr); sys.exit(3)"
+@pytest.mark.parametrize(("code", "flag"), [(2, "setup_error"), (3, "rate_limited")])
+def test_exit_codes_2_and_3_are_marked(code: int, flag: str) -> None:
+    script = f"print('hoa: stop', file=sys.stderr); sys.exit({code})"
 
     outcome = run_agent("x", "gemini", command=python_command(script))
 
-    assert outcome.rate_limited is True
+    assert getattr(outcome, flag) is True
 
 
-def test_output_outside_the_report_schema_is_an_error() -> None:
+def test_output_outside_the_report_schema_says_where() -> None:
     outcome = run_agent("x", "gemma", command=python_command("print('{}')"))
 
     assert outcome.report is None
     assert outcome.error is not None
-    assert "broke the report schema" in outcome.error
+    assert "broke the report schema at model: Field required" in outcome.error
+
+
+def test_a_hanging_agent_is_stopped(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(agent, "AGENT_TIMEOUT_SECONDS", 1)
+
+    outcome = run_agent("x", "gemma", command=python_command("import time; time.sleep(10)"))
+
+    assert outcome.error == "agent timed out after 1s"

@@ -6,7 +6,10 @@ from hoa_eval.agent import AgentReport
 from hoa_eval.scenario import Scenario
 from hoa_eval.scoring import quote_found, score
 
-OUTPUT = '{"waiting_message": "Back-off pulling image \\"hoa-demo:0.1.0-missing\\"", "count": 3}'
+OUTPUT = (
+    '{"waiting_message": "Back-off pulling image \\"hoa-demo:0.1.0-missing\\"", '
+    '"restarts": 12, "message": "ReplicaSet has timed out progressing."}'
+)
 
 
 @pytest.mark.parametrize(
@@ -15,14 +18,27 @@ OUTPUT = '{"waiting_message": "Back-off pulling image \\"hoa-demo:0.1.0-missing\
         'Back-off pulling image "hoa-demo:0.1.0-missing"',
         'waiting_message: "Back-off pulling image "hoa-demo:0.1.0-missing""',
         "Back-off   pulling image hoa-demo:0.1.0-missing.",
+        "ReplicaSet has timed out progressing",
+        "hoa-demo:0.1.0-missing",
     ],
 )
 def test_quotes_match_despite_json_escapes_quotes_and_spacing(quote: str) -> None:
     assert quote_found(quote, [OUTPUT]) is True
 
 
-@pytest.mark.parametrize("quote", ["Back-off pulling image nginx:1.0", "", '""'])
-def test_made_up_or_empty_quotes_do_not_match(quote: str) -> None:
+@pytest.mark.parametrize(
+    "quote",
+    [
+        "Back-off pulling image nginx:1.0",
+        "",
+        '""',
+        "pulling",
+        "restarts: 1",
+        "hoa-demo:0.1.0",
+        "ack-off pulling image",
+    ],
+)
+def test_made_up_short_or_partial_quotes_do_not_match(quote: str) -> None:
     assert quote_found(quote, [OUTPUT]) is False
 
 
@@ -44,6 +60,17 @@ def test_quotes_from_failed_tool_calls_do_not_count(
     result = score(image_pull.expected, make_report(quotes=("pod x not found",)))
 
     assert result.quotes_found == 0
+
+
+def test_calls_the_agent_did_not_run_are_left_out(
+    make_report: Callable[..., AgentReport], image_pull: Scenario
+) -> None:
+    report = make_report()
+    report.steps[1].executed = False
+
+    result = score(image_pull.expected, report)
+
+    assert (result.tool_calls, result.tool_errors) == (1, 0)
 
 
 def test_wrong_label_and_target_are_marked(

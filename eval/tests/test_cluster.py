@@ -1,11 +1,14 @@
 import json
+import subprocess
 
 import pytest
 
+from hoa_eval import cluster
 from hoa_eval.cluster import (
     ClusterError,
     ContainerStatus,
     DemoCluster,
+    Kubectl,
     SymptomTimeout,
     container_statuses,
     symptom_met,
@@ -15,6 +18,17 @@ from hoa_eval.scenario import Scenario, Symptom
 
 def pods_json(*statuses: dict[str, object]) -> str:
     return json.dumps({"items": [{"status": {"containerStatuses": list(statuses)}}]})
+
+
+def pod_list(*terminating: bool) -> str:
+    return json.dumps(
+        {
+            "items": [
+                {"metadata": {"name": f"p{i}", "deletionTimestamp": "now" if gone else None}}
+                for i, gone in enumerate(terminating)
+            ]
+        }
+    )
 
 
 class FakeKubectl:
@@ -68,6 +82,41 @@ def test_symptom_matches_waiting_reasons_or_restarts(status: ContainerStatus, me
     assert symptom_met([status], symptom) is met
 
 
+def test_kubectl_always_names_the_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[list[str]] = []
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen.append(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(cluster.subprocess, "run", fake_run)
+
+    assert Kubectl()("get", "pods") == "ok"
+    assert seen == [["kubectl", "--context", "kind-hoa", "get", "pods"]]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        subprocess.CompletedProcess(["kubectl"], 1, stdout="", stderr="forbidden"),
+        subprocess.TimeoutExpired(["kubectl"], 240),
+        FileNotFoundError("kubectl"),
+    ],
+)
+def test_kubectl_failures_become_cluster_errors(
+    monkeypatch: pytest.MonkeyPatch, failure: object
+) -> None:
+    def fake_run(argv: list[str], **kwargs: object) -> object:
+        if isinstance(failure, BaseException):
+            raise failure
+        return failure
+
+    monkeypatch.setattr(cluster.subprocess, "run", fake_run)
+
+    with pytest.raises(ClusterError, match="kubectl get pods failed"):
+        Kubectl()("get", "pods")
+
+
 def test_inject_patches_the_target_with_the_scenario_file(image_pull: Scenario) -> None:
     kubectl = FakeKubectl([])
 
@@ -78,18 +127,7 @@ def test_inject_patches_the_target_with_the_scenario_file(image_pull: Scenario) 
     assert args[-1].endswith("image-pull.yaml")
 
 
-def pod_list(*terminating: bool) -> str:
-    return json.dumps(
-        {
-            "items": [
-                {"metadata": {"name": f"p{i}", "deletionTimestamp": "now" if gone else None}}
-                for i, gone in enumerate(terminating)
-            ]
-        }
-    )
-
-
-def test_reset_reapplies_restarts_and_waits_until_old_pods_are_gone() -> None:
+def test_reset_reapplies_restarts_waits_for_old_pods_and_clears_events() -> None:
     clock = FakeClock()
     kubectl = FakeKubectl([pod_list(False, True), pod_list(False)])
 
@@ -102,7 +140,8 @@ def test_reset_reapplies_restarts_and_waits_until_old_pods_are_gone() -> None:
         "deployment/orders",
         "deployment/gateway",
     ]
-    assert len(kubectl.calls) == 7
+    assert kubectl.calls[-1] == ("-n", "demo", "delete", "events", "--all")
+    assert len(kubectl.calls) == 8
     assert clock.now == 3.0
 
 

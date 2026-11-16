@@ -8,7 +8,8 @@ from pydantic import BaseModel, ValidationError
 
 AGENT_COMMAND = "hoa"
 AGENT_TIMEOUT_SECONDS = 900
-# hoa investigate의 종료 코드 — 3은 LLM 요청 한도에 걸렸다는 뜻이다
+# hoa investigate의 종료 코드 — 2는 설정 오류, 3은 LLM 요청 한도
+SETUP_ERROR_EXIT = 2
 RATE_LIMITED_EXIT = 3
 
 
@@ -34,6 +35,7 @@ class ReportedStep(BaseModel):
     args: dict[str, object]
     output: str
     error: bool
+    executed: bool = True
 
 
 class ReportedUsage(BaseModel):
@@ -60,6 +62,7 @@ class AgentOutcome(BaseModel):
     report: AgentReport | None = None
     error: str | None = None
     rate_limited: bool = False
+    setup_error: bool = False
 
 
 def agent_command() -> list[str]:
@@ -74,6 +77,12 @@ def agent_command() -> list[str]:
 def last_line(text: str) -> str:
     lines = [line for line in text.strip().splitlines() if line.strip()]
     return lines[-1] if lines else "no output"
+
+
+def schema_problem(exc: ValidationError) -> str:
+    first = exc.errors()[0]
+    where = ".".join(str(part) for part in first["loc"]) or "output"
+    return f"agent output broke the report schema at {where}: {first['msg']}"
 
 
 def run_agent(alert: str, model: str, *, command: Sequence[str] | None = None) -> AgentOutcome:
@@ -93,11 +102,11 @@ def run_agent(alert: str, model: str, *, command: Sequence[str] | None = None) -
         return AgentOutcome(error=f"agent timed out after {AGENT_TIMEOUT_SECONDS}s")
     if result.returncode != 0:
         return AgentOutcome(
-            error=last_line(result.stderr), rate_limited=result.returncode == RATE_LIMITED_EXIT
+            error=last_line(result.stderr),
+            rate_limited=result.returncode == RATE_LIMITED_EXIT,
+            setup_error=result.returncode == SETUP_ERROR_EXIT,
         )
     try:
         return AgentOutcome(report=AgentReport.model_validate_json(result.stdout))
     except ValidationError as exc:
-        return AgentOutcome(
-            error=f"agent output broke the report schema: {exc.error_count()} errors"
-        )
+        return AgentOutcome(error=schema_problem(exc))

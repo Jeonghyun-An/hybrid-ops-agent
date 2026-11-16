@@ -50,7 +50,7 @@
 1. **상태가 있는 것(DB·모델·관측)은 상시 켜진 온프레미스에 둔다.** GKE 노드를 꺼도 데이터가 남는다.
 2. **상태 없는 앱은 Helm 차트 하나로 두 클러스터에 같이 배포한다.** Argo CD(온프레미스에서 실행) ApplicationSet이 k3s와 GKE 양쪽을 대상으로 잡는다. GKE 노드가 꺼져 있으면 온프레미스 쪽 에이전트가 응답한다.
 3. **클러스터 간 연결은 round03 착수 전에 정한다.** 기본안은 Tailscale 쿠버네티스 오퍼레이터로 회사 GPU 서버의 vLLM·Neo4j·Postgres를 GKE에서 사설 주소로 부르는 것이다. 회사 서버에 Tailscale을 둘 수 있는지는 회사 망 정책을 확인해 정하고(§10), 묶지 못하면 GKE 쪽 에이전트는 Gemini만 쓰고 독립으로 돈다. 어느 쪽이든 인바운드 포트는 열지 않는다.
-4. **비밀값**: GKE는 Workload Identity Federation으로 키 없이 Gemini(Vertex AI)·Secret Manager에 접근한다. 온프레미스는 SOPS(age)로 암호화한 시크릿을 git에 둔다. 로컬 티어의 Gemini 키는 커밋하지 않는 `.env`에 둔다.
+4. **비밀값**: GKE는 Workload Identity Federation으로 키 없이 Gemini(Vertex AI)·Secret Manager에 접근한다. 온프레미스는 SOPS(age)로 암호화한 시크릿을 git에 둔다. 개발 PC의 Gemini 키와 회사 vLLM 주소는 커밋하지 않는 `.env`에 둔다.
 5. **Langfuse는 Cloud 무료 등급부터 쓴다.** 셀프호스팅 v3는 ClickHouse까지 필요해 회사 GPU 서버에 다른 시스템과 같이 올리기 무겁다. 계측은 OpenTelemetry로 해 두어 백엔드를 바꿀 수 있게 한다.
 
 **실행 티어**: GPU 티어(회사 GPU 서버의 k3s, 온프레미스 LLM은 vLLM의 Gemma — 32K 문맥)와 로컬 티어(개발 PC의 kind, GPU 없음, LLM은 회사망 안이면 GPU 서버의 Gemma, 밖이면 Gemini 무료 등급)는 같은 코드와 같은 Helm 차트를 쓰고 설정만 다르다. 「로컬」은 이 티어 이름에만 쓰고, 회사 GPU의 모델은 「온프레미스 LLM(Gemma)」이라 부른다. CI는 회사망에 닿지 않으므로 항상 로컬 티어(가짜 LLM)로 돈다. 도구 출력 크기와 문맥 예산은 가장 작은 문맥(32K)에 맞춘다.

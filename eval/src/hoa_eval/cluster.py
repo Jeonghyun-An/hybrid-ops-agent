@@ -5,10 +5,9 @@ from collections.abc import Callable
 
 from pydantic import BaseModel
 
-from hoa_eval.scenario import REPO_ROOT, Fault, Symptom
+from hoa_eval.scenario import DEMO_NAMESPACE, REPO_ROOT, Fault, Symptom
 
 CONTEXT = "kind-hoa"
-DEMO_NAMESPACE = "demo"
 DEMO_MANIFESTS = REPO_ROOT / "deploy" / "kind" / "demo"
 DEMO_DEPLOYMENTS = ("inventory", "orders", "gateway")
 KUBECTL_TIMEOUT_SECONDS = 240
@@ -63,15 +62,18 @@ class Kubectl:
         self.context = context
 
     def __call__(self, *args: str) -> str:
-        result = subprocess.run(
-            ["kubectl", "--context", self.context, *args],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=KUBECTL_TIMEOUT_SECONDS,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                ["kubectl", "--context", self.context, *args],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=KUBECTL_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+            raise ClusterError(f"kubectl {' '.join(args)} failed: {exc}") from exc
         if result.returncode != 0:
             raise ClusterError(f"kubectl {' '.join(args)} failed: {result.stderr.strip()}")
         return result.stdout
@@ -110,6 +112,8 @@ class DemoCluster:
                 "-n", DEMO_NAMESPACE, "rollout", "status", f"deployment/{name}", "--timeout=180s"
             )
         self.wait_settled()
+        # 이전 회차의 이벤트(기본 1시간 보관)가 다음 조사의 get_events에 섞이지 않게
+        self.kubectl("-n", DEMO_NAMESPACE, "delete", "events", "--all")
 
     def wait_settled(self) -> None:
         """rollout status는 새 파드만 본다 — 종료 중인 옛 파드가 남으면 다음 회차 조사에 섞인다."""

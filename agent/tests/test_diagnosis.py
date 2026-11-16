@@ -1,4 +1,7 @@
+from pathlib import Path
+
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from hoa_agent.diagnosis import CauseLabel, Diagnosis
@@ -33,3 +36,15 @@ def test_json_schema_lists_every_label_for_the_model() -> None:
     schema = Diagnosis.model_json_schema()
 
     assert set(schema["$defs"]["CauseLabel"]["enum"]) == {label.value for label in CauseLabel}
+
+
+def test_eval_scenarios_only_expect_labels_the_agent_can_answer() -> None:
+    """평가 멤버는 라벨 목록을 import하지 않고 옮겨 두었다 — 어긋나면 정답에 영영 닿지 못한다."""
+    scenarios = Path(__file__).resolve().parents[2] / "eval" / "scenarios"
+    expected = {
+        yaml.safe_load(path.read_text(encoding="utf-8"))["expected"]["cause_label"]
+        for path in scenarios.glob("*.yaml")
+    }
+
+    assert expected
+    assert expected <= {label.value for label in CauseLabel}

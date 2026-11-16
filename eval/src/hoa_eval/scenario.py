@@ -3,10 +3,12 @@ from pathlib import Path
 from typing import Literal, Self
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCENARIO_DIR = REPO_ROOT / "eval" / "scenarios"
+FAULTS_DIR = REPO_ROOT / "deploy" / "kind" / "faults"
+DEMO_NAMESPACE = "demo"
 
 # hoa_agent.diagnosis.CauseLabel의 값 — 멤버 경계 때문에 import하지 않고 옮겨 둔다
 CauseLabel = Literal[
@@ -25,10 +27,16 @@ class ScenarioError(Exception):
 
 
 class Fault(BaseModel):
+    """장애 패치는 기준 매니페스트에 이미 있는 필드의 값만 바꾼다.
+
+    복구는 기준 매니페스트를 client-side apply로 다시 적용한다 — 패치가 새로 더한 필드는 남는다.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     patch: Path
-    namespace: str
+    # 러너는 관리자 컨텍스트로 쓴다 — 코딩 표준이 허용한 데모 네임스페이스 밖은 받지 않는다
+    namespace: Literal["demo"]
     deployment: str
 
 
@@ -64,11 +72,23 @@ class Scenario(BaseModel):
 
 
 def load_scenario(path: Path) -> Scenario:
-    scenario = Scenario.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+    try:
+        scenario = Scenario.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+    except (yaml.YAMLError, ValidationError) as exc:
+        raise ScenarioError(f"{path.name}: {exc}") from exc
     if scenario.name != path.stem:
         raise ScenarioError(f"{path.name}: name must match the file name, got {scenario.name}")
-    if not (REPO_ROOT / scenario.fault.patch).is_file():
-        raise ScenarioError(f"{path.name}: patch file not found: {scenario.fault.patch}")
+    patch = (REPO_ROOT / scenario.fault.patch).resolve()
+    if FAULTS_DIR.resolve() not in patch.parents or not patch.is_file():
+        raise ScenarioError(
+            f"{path.name}: patch must be a file under deploy/kind/faults/: {scenario.fault.patch}"
+        )
+    fault_target = f"{scenario.fault.namespace}/{scenario.fault.deployment}"
+    if scenario.expected.target != fault_target:
+        raise ScenarioError(
+            f"{path.name}: expected.target must be the fault target {fault_target}, "
+            f"got {scenario.expected.target}"
+        )
     return scenario
 
 

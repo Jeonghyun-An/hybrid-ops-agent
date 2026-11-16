@@ -24,7 +24,7 @@
 - 모든 함수 인자·반환에 타입힌트를 단다(테스트 포함 — ruff `ANN`이 강제한다). `list[str]`·`X | None` 같은 최신 문법을 쓴다.
 - 경계 데이터(LangGraph 상태, MCP 도구 입출력, API 요청·응답, 평가 시나리오)는 Pydantic v2 모델로 정의한다. 경계를 넘는 bare `dict`는 쓰지 않는다.
 - 네트워크 I/O(LLM·MCP·DB·HTTP·k8s API)는 `async def`로 쓴다. CLI 진입점(`main`)은 동기로 두고 필요하면 `asyncio.run`으로 감싼다.
-- 하위 프로세스(`kubectl`·`hoa` CLI)를 하나씩 차례로 부르는 도구(평가 러너)는 동기 `subprocess.run`을 쓰고 컨텍스트·제한 시간·`encoding="utf-8"`을 명시한다. 하위 프로세스로 JSON을 넘기는 CLI는 표준출력을 UTF-8로 고정한다(`docs/ops/recurring-gotchas.md` 8번).
+- 하위 프로세스(`kubectl`·`hoa` CLI)를 하나씩 차례로 부르는 도구(평가 러너)는 동기 `subprocess.run`을 쓰고 컨텍스트·제한 시간·`encoding="utf-8"`(읽는 쪽은 `errors="replace"`도)을 명시한다. 하위 프로세스로 JSON을 넘기는 CLI는 표준출력을 UTF-8로 고정한다(`docs/ops/recurring-gotchas.md` 8번).
 
 ## 주석·docstring
 
