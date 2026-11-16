@@ -1,23 +1,25 @@
-from hoa_mcp.k8s_read.budget import MAX_OUTPUT_CHARS, clip, fit, serialized_chars
+import pytest
+
+from hoa_mcp.k8s_read.budget import MAX_OUTPUT_CHARS, OutputTooLarge, clip, fit, serialized_chars
 from hoa_mcp.k8s_read.models import EventList, EventSummary, PodLogs
 
 
-def test_clip_keeps_short_text():
+def test_clip_keeps_short_text() -> None:
     assert clip("short", 10) == "short"
 
 
-def test_clip_marks_cut_text_with_ellipsis_within_the_limit():
+def test_clip_marks_cut_text_with_ellipsis_within_the_limit() -> None:
     clipped = clip("x" * 50, 10)
     assert len(clipped) == 10
     assert clipped.endswith("…")
 
 
-def test_fit_leaves_a_small_result_untouched():
+def test_fit_leaves_a_small_result_untouched() -> None:
     logs = PodLogs(namespace="demo", pod="p", previous=False, lines=["one", "two"])
     assert fit(logs, "lines", drop="head") == logs
 
 
-def test_fit_drops_oldest_log_lines_and_marks_truncated():
+def test_fit_drops_oldest_log_lines_and_marks_truncated() -> None:
     lines = [f"{i:03d} " + "x" * 96 for i in range(300)]
     logs = PodLogs(namespace="demo", pod="p", previous=False, lines=lines)
     fitted = fit(logs, "lines", drop="head")
@@ -27,7 +29,7 @@ def test_fit_drops_oldest_log_lines_and_marks_truncated():
     assert fitted.lines[0] != lines[0]
 
 
-def test_fit_drops_from_the_tail_for_newest_first_lists():
+def test_fit_drops_from_the_tail_for_newest_first_lists() -> None:
     events = [
         EventSummary(type="Warning", reason=f"R{i}", object="Pod/p", message="m" * 250, count=1)
         for i in range(100)
@@ -36,3 +38,9 @@ def test_fit_drops_from_the_tail_for_newest_first_lists():
     assert fitted.truncated is True
     assert fitted.events[0].reason == "R0"
     assert serialized_chars(fitted) <= MAX_OUTPUT_CHARS
+
+
+def test_fit_refuses_to_return_an_oversized_result() -> None:
+    logs = PodLogs(namespace="d" * (MAX_OUTPUT_CHARS + 1), pod="p", previous=False, lines=["x"])
+    with pytest.raises(OutputTooLarge, match="even without lines"):
+        fit(logs, "lines", drop="head")

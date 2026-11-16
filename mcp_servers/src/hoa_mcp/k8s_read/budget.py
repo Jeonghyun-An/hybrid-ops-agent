@@ -1,12 +1,16 @@
 from typing import Literal
 
-import pydantic_core
 from pydantic import BaseModel
 
 MAX_OUTPUT_CHARS = 12_000
 MAX_LINE_CHARS = 500
 MAX_MESSAGE_CHARS = 300
+MAX_ENV_VARS = 40
 ELLIPSIS = "…"
+
+
+class OutputTooLarge(Exception):
+    pass
 
 
 def clip(text: str, limit: int) -> str:
@@ -16,8 +20,8 @@ def clip(text: str, limit: int) -> str:
 
 
 def serialized_chars(model: BaseModel) -> int:
-    """Counts characters the way FastMCP serializes a tool result (indent=2 JSON)."""
-    return len(pydantic_core.to_json(model, indent=2).decode())
+    """Counts characters of the indent=2 JSON that FastMCP sends as the tool result text."""
+    return len(model.model_dump_json(indent=2))
 
 
 def fit[M: BaseModel](
@@ -29,7 +33,9 @@ def fit[M: BaseModel](
 ) -> M:
     items = list(getattr(model, field))
     fitted = model
-    while items and serialized_chars(fitted) > limit:
+    while serialized_chars(fitted) > limit:
+        if not items:
+            raise OutputTooLarge(f"output stays above {limit} characters even without {field}")
         items = items[1:] if drop == "head" else items[:-1]
         fitted = model.model_copy(update={field: items, "truncated": True})
     return fitted

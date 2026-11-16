@@ -55,7 +55,7 @@ def mcp_kubeconfig() -> Path:
     return path
 
 
-def container_statuses(app: str) -> list[dict]:
+def container_statuses(app: str) -> list[dict[str, object]]:
     pods = json.loads(kubectl("-n", "demo", "get", "pods", "-l", f"app={app}", "-o", "json"))
     return [s for pod in pods["items"] for s in pod["status"].get("containerStatuses", [])]
 
@@ -98,6 +98,9 @@ def injected(fault: str) -> Iterator[None]:
         yield
     finally:
         kubectl("apply", "-f", str(DEMO_DIR))
+        # 진행 기한(progressDeadlineSeconds)을 넘긴 장애도 되돌리도록
+        # 새 ReplicaSet으로 다시 시작한다
+        kubectl("-n", "demo", "rollout", "restart", "deployment")
         for name in ("inventory", "orders", "gateway"):
             kubectl("-n", "demo", "rollout", "status", f"deployment/{name}", "--timeout=180s")
 
@@ -109,14 +112,14 @@ def server() -> FastMCP:
     return build_server(ApiKubeReader(kubeconfig), settings)
 
 
-async def call(server: FastMCP, tool: str, arguments: dict) -> dict:
+async def call(server: FastMCP, tool: str, arguments: dict[str, object]) -> dict[str, object]:
     async with create_connected_server_and_client_session(server) as session:
         result = await session.call_tool(tool, arguments)
     assert result.isError is False, result.content[0].text
     return result.structuredContent
 
 
-def test_demo_app_answers_through_gateway_orders_and_inventory():
+def test_demo_app_answers_through_gateway_orders_and_inventory() -> None:
     body = json.loads(
         kubectl("get", "--raw", "/api/v1/namespaces/demo/services/gateway:http/proxy/api/orders/1")
     )
@@ -125,14 +128,17 @@ def test_demo_app_answers_through_gateway_orders_and_inventory():
 
 
 @pytest.mark.anyio
-async def test_list_pods_shows_the_three_running_demo_services(server):
+async def test_three_demo_services_are_running_and_available(server: FastMCP) -> None:
     content = await call(server, "list_pods", {"namespace": "demo"})
     running = {p["name"].rsplit("-", 2)[0] for p in content["pods"] if p["phase"] == "Running"}
     assert running == {"gateway", "orders", "inventory"}
+    for name in ("gateway", "orders", "inventory"):
+        deployment = await call(server, "describe_deployment", {"namespace": "demo", "name": name})
+        assert deployment["available_replicas"] == deployment["replicas"] == 1
 
 
 @pytest.mark.anyio
-async def test_image_pull_fault_shows_in_pods_events_and_replica_sets(server):
+async def test_image_pull_fault_shows_in_pods_events_and_replica_sets(server: FastMCP) -> None:
     with injected("image-pull"):
         wait_for("orders 이미지 내려받기 실패", lambda: waiting_reasons("orders") & PULL_FAILURES)
         pods = await call(server, "list_pods", {"namespace": "demo"})
@@ -150,7 +156,7 @@ async def test_image_pull_fault_shows_in_pods_events_and_replica_sets(server):
 
 
 @pytest.mark.anyio
-async def test_bad_config_fault_shows_in_previous_logs_and_env(server):
+async def test_bad_config_fault_shows_in_previous_logs_and_env(server: FastMCP) -> None:
     with injected("bad-config"):
         wait_for("inventory 재시작", lambda: max_restarts("inventory") >= 1)
         pods = await call(server, "list_pods", {"namespace": "demo"})
@@ -170,13 +176,13 @@ async def test_bad_config_fault_shows_in_previous_logs_and_env(server):
 
 
 @pytest.mark.anyio
-async def test_namespace_outside_the_allowlist_is_rejected(server):
+async def test_namespace_outside_the_allowlist_is_rejected(server: FastMCP) -> None:
     async with create_connected_server_and_client_session(server) as session:
         result = await session.call_tool("list_pods", {"namespace": "kube-system"})
     assert result.isError is True
 
 
-def test_read_only_account_cannot_read_secrets_or_other_namespaces():
+def test_read_only_account_cannot_read_secrets_or_other_namespaces() -> None:
     secrets = read_only_kubectl("-n", "demo", "get", "secrets")
     assert secrets.returncode != 0
     assert "forbidden" in secrets.stderr

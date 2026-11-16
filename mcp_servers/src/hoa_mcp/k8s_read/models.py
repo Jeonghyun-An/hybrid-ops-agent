@@ -6,6 +6,8 @@ class PodSummary(BaseModel):
     phase: str
     ready: str
     restarts: int
+    reason: str | None = None
+    terminating: bool = False
     waiting_reason: str | None = None
     waiting_message: str | None = None
     last_terminated_reason: str | None = None
@@ -45,6 +47,7 @@ class ContainerView(BaseModel):
     name: str
     image: str
     env: list[EnvVarView]
+    env_from: list[str]
     requests: dict[str, str]
     limits: dict[str, str]
 
