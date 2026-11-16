@@ -101,7 +101,7 @@ plan: `docs/superpowers/plans/2026-11-16-round01b-agent-llm-eval.md`
 
 ## 상태
 - [x] code-reviewer 정적 리뷰 통과(high·medium 수정, low는 수정하거나 「결정」에 이유)
-- [ ] CI green(작업 브랜치 마지막 커밋)
+- [x] CI green(작업 브랜치 마지막 커밋) — 실행 43827309340(`aff689c`) 세 잡 success
 - [x] 수동 스모크 확인
 - [x] 문서 갱신(교본·00_status·실제로 돌려 보며 새로 겪은 함정(개발 환경 포함)을 `docs/ops/recurring-gotchas.md`에 추가)
 - [x] 클라우드 리소스 정지 확인 — 해당 없음(GKE를 켜지 않은 라운드)
