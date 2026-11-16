@@ -12,7 +12,7 @@
 
 - 타입(Conventional): `feat`·`fix`·`docs`·`chore`·`refactor`·`test`
 - 설명은 영문 kebab-case(예: `feat/round01-end-to-end`) — 한글 브랜치명은 Windows·CI 호환성 문제로 쓰지 않는다.
-- 서브라운드: 한 라운드가 성격이 다른 여러 덩어리로 쪼개지면 소문자 접미를 붙인다(`round02a`, `round02b`…). 접미는 성격 라벨이며 실행 순서가 아니다.
+- 서브라운드: 한 라운드가 성격이 다른 여러 덩어리로 쪼개지면 소문자 접미를 붙인다(`round02a`, `round02b`…). 접미는 성격 라벨이며 실행 순서가 아니다. 파일·폴더 이름에도 접미를 그대로 쓴다(`round01a-완료노트.md`, `docs/guides/round01a/`).
 
 ## 흐름
 
@@ -31,7 +31,7 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 - 작업 브랜치 → `dev`: 매번 사용자 채팅 승인 필수. 리뷰 게이트는 (1) `.claude/agents/code-reviewer.md` 서브에이전트의 정적 리뷰와 (2) 자가 점검 체크리스트(CI green + 관련 기능 수동 스모크 + 문서 갱신 여부)를 순서대로 통과하는 것이다.
 - 리뷰 발견 처리: high·medium은 모두 고친다. low는 고치거나, 고치지 않는 이유를 완료노트 「결정」에 한 줄로 적는다. 고친 뒤에는 CI를 다시 확인한다.
 - `dev` → `main`: 라운드 종료 판단·승인은 사용자. round02부터는 `main` push가 곧 배포다.
-- push: 작업 브랜치와 `dev`의 일반 push는 Claude가 따로 묻지 않고 한다. 강제 push와 원격 브랜치 삭제는 묻는다. `main` push는 위 라운드 종료 승인 없이는 하지 않는다. 라운드 흐름에서 사용자가 확인하는 지점은 spec·계획서(§라운드 생애주기 1·2)와 위 두 머지다 — 비용이 나는 Azure 작업 승인(`CLAUDE.md` §4)은 별도다.
+- push: 작업 브랜치와 `dev`의 일반 push는 Claude가 따로 묻지 않고 한다. 강제 push와 원격 브랜치 삭제는 묻는다. `main` push는 위 라운드 종료 승인 없이는 하지 않는다. 라운드 흐름에서 사용자가 확인하는 지점은 spec·계획서(§라운드 생애주기 1·2)와 위 두 머지다 — 비용이 나는 클라우드 작업과 회사 서버의 기존 시스템을 건드리는 작업의 승인(`CLAUDE.md` §4)은 별도다.
 
 ## 커밋 메시지
 
@@ -50,34 +50,37 @@ dev ─분기→ <type>/round<NN>-<설명> ─개발·커밋·push(CI)─→ 리
 | ruff check · ruff format --check | pre-commit + CI | round00 |
 | pytest | CI | round00 |
 | gitleaks | pre-commit(스테이징 변경) + CI(전체 이력) | round00 |
+| shellcheck | pre-commit + CI(pre-commit으로 같은 버전) | round01a |
+| 통합 테스트(`pytest -m integration`, kind 클러스터) | CI | round01a |
 | helm lint · kubeconform | CI | round02 |
 | terraform fmt -check · terraform validate | pre-commit + CI | round03 |
 
 - 검사는 그 파일 종류가 처음 생기는 라운드에 더한다 — 대상 없는 검사는 아무것도 증명하지 못한다.
 - `terraform apply`는 CI에서 돌리지 않는다. 로컬에서 사용자 승인 뒤 손으로만 한다.
 - 클론한 뒤 한 번(호스트에서): `uv run pre-commit install`. devcontainer 안에서는 하지 않는다(§개발 환경).
-- 두 곳에 적힌 도구 버전은 같이 올린다: ruff는 `pyproject.toml` dev 그룹과 `.pre-commit-config.yaml` rev, gitleaks는 `.pre-commit-config.yaml` rev와 `.github/workflows/ci.yml` 다운로드 URL. uv는 `pyproject.toml`의 `[tool.uv] required-version`이 정본이다 — CI(setup-uv)는 이 값을 읽고, devcontainer `postCreateCommand`의 `pipx install` 버전 범위는 손으로 맞춘다.
+- 두 곳에 적힌 도구 버전은 같이 올린다: ruff는 `pyproject.toml` dev 그룹과 `.pre-commit-config.yaml` rev, gitleaks는 `.pre-commit-config.yaml` rev와 `.github/workflows/ci.yml` 다운로드 URL. uv는 `pyproject.toml`의 `[tool.uv] required-version`이 정본이다 — CI(setup-uv)는 이 값을 읽고, devcontainer `postCreateCommand`의 `pipx install` 버전 범위는 손으로 맞춘다. kind는 `.github/workflows/ci.yml`의 다운로드 버전과 `scripts/dev-cluster.sh`의 `KIND_VERSION`을, kubectl은 `ci.yml`의 다운로드 버전과 `.devcontainer/devcontainer.json`의 kubectl 버전을 같이 올린다(kind 노드 이미지와 같은 마이너).
 
 ## 개발 환경
 
 | 환경 | 용도 | 들어오는 라운드 |
 |---|---|---|
 | 개발 PC: uv + Docker Desktop | 코드·단위 테스트 | round00 |
-| devcontainer (`.devcontainer/`) | 개발 PC가 바뀌어도 같은 도구 세트(uv·kubectl·helm·terraform·az) | round00 |
-| 개발 PC: kind | 끝-끝 경로, MCP 통합 테스트 | round01 |
-| 집 PC: Ubuntu + k3s + GPU Operator | 상시 클러스터(데이터·모델·관측·Argo CD) | round02 |
-| Azure AKS | 작업할 때만 켜는 클라우드 클러스터 | round03 |
+| devcontainer (`.devcontainer/`) | 개발 PC가 바뀌어도 같은 도구 세트(uv·kubectl·helm·terraform — gcloud는 round03) | round00 |
+| 개발 PC: kind (로컬 티어) | GPU 없이 도는 개발 클러스터, 데모 앱·MCP 통합 테스트 | round01a |
+| 회사 GPU 서버: k3s + GPU Operator (GPU 티어) | 상시 클러스터(모델·데이터·관측·Argo CD) | round02 |
+| GCP GKE | 작업할 때만 노드를 켜는 클라우드 클러스터 | round03 |
 
 - Python: `uv sync` → `uv run pytest`. Python 버전은 `.python-version`(3.12)에 맞춰 uv가 준비한다.
 - GitHub CLI(`gh`)는 호스트에 설치하고 `gh auth login`한다 — CI 결과 확인과 `/round-finish`가 쓴다.
 - devcontainer는 작업 폴더와 `.git`을 호스트와 공유한다. 그래서 컨테이너의 venv는 작업 폴더 밖(`/home/vscode/.venv`, `UV_PROJECT_ENVIRONMENT`)에 두고, `pre-commit install`은 호스트에서만 한다 — 컨테이너에서 하면 공유된 훅이 컨테이너 Python을 가리켜 호스트 커밋이 깨진다. Windows 호스트에서는 커밋도 호스트에서 한다 — 호스트에서 설치한 훅 스크립트가 CRLF라 컨테이너에서 실행되지 않는다(`docs/ops/recurring-gotchas.md` 3번).
+- kind(로컬 티어, round01a): Docker Desktop과 kind v0.33.0을 호스트에 설치한다. `bash scripts/dev-cluster.sh up`이 클러스터 `hoa`를 만들고 데모 앱을 빌드·적재·배포한 뒤 MCP 서버용 읽기 전용 kubeconfig(`~/.kube/hoa-kind-mcp-read.kubeconfig`, 토큰 12시간)를 쓴다. 그 밖의 명령은 `down`·`fault <image-pull|bad-config>`·`reset`·`mcp-kubeconfig`이고, 통합 테스트는 `uv run pytest -m integration`이다. kind와 통합 테스트는 호스트에서 돌린다 — devcontainer 안에서는 kind API 주소(`127.0.0.1`)에 닿지 않는다. Windows에서는 Git Bash로 실행한다.
 - 각 환경의 세부 절차(설치·접속·기동/정지)는 그 환경이 들어오는 라운드에 이 절에 더한다.
 
 ## 개발 가이드 문서 (필수)
 
 - 1 라운드 = 1 교본(가이드). `docs/guides/round<NN>/`에 저장(템플릿: `docs/guides/_TEMPLATE.md`).
 - 구성: paraphrase된 라운드 프롬프트 → 설계 요약 → 개념 입문(이 라운드에 처음 나온 개념을 기초부터) → 전 코드/문서 클론코딩 가능하게 수록(발췌·플레이스홀더 금지) → 검증 → 면접식 Q&A.
-- 리뷰 흐름: 작업 브랜치 push → 교본↔실제 파일 대조(교본의 코드블록을 뽑아 실제 파일과 diff한다 — 제목 수만 세지 않는다. 그다음 `.claude/agents/code-reviewer.md`로 한 번 더 본다. 리뷰어는 git을 실행하지 않으므로 대조할 파일 목록은 호출하는 쪽이 넘긴다) → 승인 → `dev` 머지.
+- 리뷰 흐름: 작업 브랜치 push → 교본↔실제 파일 대조(`uv run python scripts/check_guide.py docs/guides/round<NN>/`가 교본의 「**파일**:」 코드블록을 실제 파일과 diff한다 — 제목 수만 세지 않는다. 그다음 `.claude/agents/code-reviewer.md`로 한 번 더 본다. 리뷰어는 git을 실행하지 않으므로 대조할 파일 목록은 호출하는 쪽이 넘긴다) → 승인 → `dev` 머지.
 
 ## 라운드 생애주기
 
