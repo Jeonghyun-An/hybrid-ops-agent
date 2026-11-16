@@ -1,0 +1,18 @@
+[project]
+name = "hoa-demo"
+version = "0.1.0"
+description = "진단 대상 데모 앱 — gateway·orders·inventory 세 서비스(이미지 하나, 역할은 환경변수)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.162",
+    "httpx>=0.28",
+    "pydantic>=2.14",
+    "uvicorn>=0.54",
+]
+
+[project.scripts]
+hoa-demo = "hoa_demo.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"

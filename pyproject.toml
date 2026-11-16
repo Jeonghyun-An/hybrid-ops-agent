@@ -1,18 +1,20 @@
 [project]
 name = "hybrid-ops-agent"
 version = "0.0.0"
-description = "온프레미스(k3s)와 Azure(AKS)를 함께 쓰는 쿠버네티스 운영 에이전트 — uv 워크스페이스 루트"
+description = "온프레미스(k3s)와 GCP(GKE)를 함께 쓰는 쿠버네티스 운영 에이전트 — uv 워크스페이스 루트"
 requires-python = ">=3.12"
-dependencies = ["hoa-agent"]
+dependencies = ["hoa-agent", "hoa-demo", "hoa-mcp"]
 
 [tool.uv]
 required-version = ">=0.11.31,<0.12"
 
 [tool.uv.workspace]
-members = ["agent"]
+members = ["agent", "demo_app", "mcp_servers"]
 
 [tool.uv.sources]
 hoa-agent = { workspace = true }
+hoa-demo = { workspace = true }
+hoa-mcp = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -24,11 +26,15 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["agent/src"]
+src = ["agent/src", "demo_app/src", "mcp_servers/src"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "ANN"]
 
 [tool.pytest.ini_options]
-addopts = "--import-mode=importlib"
-testpaths = ["agent/tests"]
+addopts = '--import-mode=importlib --strict-markers -m "not integration"'
+testpaths = ["agent/tests", "demo_app/tests", "mcp_servers/tests", "scripts/tests"]
+filterwarnings = ["error"]
+markers = [
+    "integration: kind 클러스터가 필요한 통합 테스트 — uv run pytest -m integration 으로 따로 돈다",
+]
