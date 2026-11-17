@@ -1,6 +1,6 @@
 # round02a — Helm 차트·클러스터 안 MCP 서버·에이전트 API 설계
 
-> 상태: 검토 중(2026-11-17)
+> 상태: 승인(2026-11-17)
 > 라운드: round02a. round02를 둘로 나눈 앞쪽이다. 배포 패키징을 로컬 티어(kind)에서 끝내고, GPU 티어(k3s·GPU Operator·vLLM 이전·임베딩·Argo CD·SOPS)는 round02b에서 한다(§3.1).
 > 전체 설계: `docs/superpowers/specs/2026-11-09-hybrid-ops-agent-design.md` §3·§4·§7·§8. 직전 라운드: `docs/superpowers/specs/2026-11-16-round01b-agent-llm-eval-design.md`, `docs/roadmap/round01b-완료노트.md`.
 > 브랜치: `feat/round02a-helm-charts`
