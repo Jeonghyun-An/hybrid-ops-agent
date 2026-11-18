@@ -1,3 +1,4 @@
+import httpx
 from mcp.shared.exceptions import McpError
 from mcp.types import ErrorData
 
@@ -29,3 +30,13 @@ def test_other_errors_pass_through_unwrapped() -> None:
     cause = RuntimeError("model down")
 
     assert surfaced(ExceptionGroup("tasks", [cause])) is cause
+
+
+def test_an_unreachable_mcp_url_is_a_setup_error_without_the_address() -> None:
+    refused = httpx.ConnectError("connection refused: http://hoa-mcp-k8s-read.hoa-system.svc/mcp")
+
+    for raised in (refused, ExceptionGroup("tasks", [refused])):
+        error = surfaced(raised)
+        assert isinstance(error, MCPSetupError)
+        assert "ConnectError" in str(error)
+        assert "hoa-system.svc" not in str(error)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_mcp_adapters.sessions import StdioConnection
+from langchain_mcp_adapters.sessions import StdioConnection, StreamableHttpConnection
 from langchain_mcp_adapters.tools import load_mcp_tools
 
 SERVER_NAME = "k8s-read"
@@ -27,8 +27,13 @@ def server_command() -> str:
     return found
 
 
-def k8s_read_connection(env: Mapping[str, str]) -> StdioConnection:
-    """서버 프로세스에는 자기 설정만 넘긴다 — LLM API 키 같은 다른 환경변수는 물려주지 않는다."""
+def k8s_read_connection(env: Mapping[str, str]) -> StdioConnection | StreamableHttpConnection:
+    """HOA_MCP_URL이 있으면 클러스터 안 MCP 서버에 HTTP로 붙고(hoa serve, 포트포워드),
+    없으면 서버를 stdio 자식 프로세스로 띄운다. 자식 프로세스에는 자기 설정만 넘긴다 —
+    LLM API 키 같은 다른 환경변수는 물려주지 않는다."""
+    url = env.get("HOA_MCP_URL", "").strip()
+    if url:
+        return {"transport": "streamable_http", "url": url}
     kubeconfig = Path(env.get("HOA_MCP_KUBECONFIG", "").strip() or DEFAULT_KUBECONFIG)
     if not kubeconfig.expanduser().is_file():
         raise MCPSetupError(

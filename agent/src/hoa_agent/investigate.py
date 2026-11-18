@@ -2,6 +2,7 @@ import os
 import time
 from collections.abc import Mapping
 
+import httpx
 from mcp.shared.exceptions import McpError
 
 from hoa_agent.graph import InvestigationState, build_graph, initial_state
@@ -23,10 +24,15 @@ def sole_exception(group: BaseExceptionGroup) -> BaseException:
 
 
 def surfaced(exc: BaseException) -> BaseException:
-    """도구 실패는 ToolNode가 메시지로 바꾸므로 세션 밖까지 온 McpError는 서버 시작 실패다."""
+    """도구 실패는 ToolNode가 메시지로 바꾸므로 세션 밖까지 온 MCP·HTTP 오류는 서버 연결 실패다."""
     cause = sole_exception(exc) if isinstance(exc, BaseExceptionGroup) else exc
     if isinstance(cause, McpError):
         return MCPSetupError(f"the MCP server stopped ({cause}) — see its message above")
+    if isinstance(cause, httpx.HTTPError):
+        # 원문에는 MCP 서버 주소가 들어 있다 — 종류만 알린다(LLM 오류는 openai가 따로 감싼다)
+        return MCPSetupError(
+            f"the MCP server could not be reached ({type(cause).__name__}) — check HOA_MCP_URL"
+        )
     return cause
 
 
@@ -42,7 +48,7 @@ async def run_investigation(
             final = InvestigationState.model_validate(
                 await build_graph(model, tools).ainvoke(initial_state(alert))
             )
-    except (BaseExceptionGroup, McpError) as exc:
+    except (BaseExceptionGroup, McpError, httpx.HTTPError) as exc:
         # 작업 그룹이 묶어 올린 예외를 풀고, MCP 서버 시작 실패는 설정 오류로 바꾼다
         raise surfaced(exc) from None
     if final.diagnosis is None or final.stop_reason is None:

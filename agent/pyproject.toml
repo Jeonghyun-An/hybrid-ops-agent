@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "운영 에이전트(LangGraph)와 hoa 명령줄 도구"
 requires-python = ">=3.12"
 dependencies = [
+    "httpx>=0.28.1",
     "langchain-core>=1.8.1",
     "langchain-mcp-adapters>=0.3.2",
     # ChatOpenAICompat이 비공개 메서드를 재정의한다 — 마이너를 올릴 때 반복 함정 7번을 확인한다

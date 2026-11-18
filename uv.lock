@@ -684,6 +684,7 @@ name = "hoa-agent"
 version = "0.1.0"
 source = { editable = "agent" }
 dependencies = [
+    { name = "httpx" },
     { name = "langchain-core" },
     { name = "langchain-mcp-adapters" },
     { name = "langchain-openai" },
@@ -695,6 +696,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain-core", specifier = ">=1.8.1" },
     { name = "langchain-mcp-adapters", specifier = ">=0.3.2" },
     { name = "langchain-openai", specifier = ">=1.8,<1.9" },

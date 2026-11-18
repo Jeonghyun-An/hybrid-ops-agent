@@ -23,3 +23,17 @@ def test_server_gets_only_its_own_settings_not_the_llm_key(tmp_path: Path) -> No
 def test_missing_kubeconfig_is_reported_before_starting_the_server(tmp_path: Path) -> None:
     with pytest.raises(MCPSetupError, match="dev-cluster.sh up"):
         k8s_read_connection({"HOA_MCP_KUBECONFIG": str(tmp_path / "missing")})
+
+
+def test_mcp_url_selects_streamable_http_and_needs_no_kubeconfig(tmp_path: Path) -> None:
+    connection = k8s_read_connection(
+        {
+            "HOA_MCP_URL": " http://hoa-mcp-k8s-read.hoa-system.svc/mcp ",
+            "HOA_MCP_KUBECONFIG": str(tmp_path / "missing"),
+        }
+    )
+
+    assert connection == {
+        "transport": "streamable_http",
+        "url": "http://hoa-mcp-k8s-read.hoa-system.svc/mcp",
+    }
