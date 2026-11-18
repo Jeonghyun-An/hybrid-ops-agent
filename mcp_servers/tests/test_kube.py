@@ -90,3 +90,39 @@ async def test_unloadable_kubeconfig_is_a_kube_error(monkeypatch: pytest.MonkeyP
 
     with pytest.raises(KubeError, match="kubeconfig could not be loaded"):
         await ApiKubeReader(Path("unused"))._call(never)
+
+
+@pytest.mark.anyio
+async def test_in_cluster_reader_loads_the_pod_token_on_every_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loads: list[kube.client.Configuration] = []
+
+    def fake_load(client_configuration: kube.client.Configuration) -> None:
+        loads.append(client_configuration)
+        client_configuration.host = "https://kubernetes.default.svc"
+
+    monkeypatch.setattr(kube.config, "load_incluster_config", fake_load)
+
+    async def host(api: ApiClient) -> str:
+        return api.configuration.host
+
+    reader = ApiKubeReader(None)
+    assert await reader._call(host) == "https://kubernetes.default.svc"
+    assert await reader._call(host) == "https://kubernetes.default.svc"
+    # 호출마다 토큰 파일을 다시 읽는다 — 투영된 ServiceAccount 토큰은 주기적으로 바뀐다
+    assert len(loads) == 2
+
+
+@pytest.mark.anyio
+async def test_in_cluster_reader_outside_a_pod_is_a_kube_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
+    monkeypatch.delenv("KUBERNETES_SERVICE_PORT", raising=False)
+
+    async def never(api: ApiClient) -> None:
+        raise AssertionError("must not be called")
+
+    with pytest.raises(KubeError, match="in-cluster service account could not be loaded"):
+        await ApiKubeReader(None)._call(never)

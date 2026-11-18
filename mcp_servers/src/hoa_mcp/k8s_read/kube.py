@@ -66,16 +66,27 @@ class KubeReader(Protocol):
 
 
 class ApiKubeReader:
-    def __init__(self, kubeconfig: Path) -> None:
+    """kubeconfig가 None이면 파드의 ServiceAccount 토큰(in-cluster)으로 붙는다."""
+
+    def __init__(self, kubeconfig: Path | None) -> None:
         self._kubeconfig = kubeconfig
+
+    async def _client(self) -> ApiClient:
+        if self._kubeconfig is None:
+            # 호출마다 토큰 파일을 다시 읽는다 — 투영된 토큰은 주기적으로 바뀐다
+            configuration = client.Configuration()
+            config.load_incluster_config(client_configuration=configuration)
+            return ApiClient(configuration)
+        return await config.new_client_from_config(
+            config_file=str(self._kubeconfig), persist_config=False
+        )
 
     async def _call[T](self, request: Callable[[ApiClient], Awaitable[T]]) -> T:
         try:
-            api = await config.new_client_from_config(
-                config_file=str(self._kubeconfig), persist_config=False
-            )
+            api = await self._client()
         except (ConfigException, OSError) as exc:
-            raise KubeError(0, "kubeconfig could not be loaded") from exc
+            source = "in-cluster service account" if self._kubeconfig is None else "kubeconfig"
+            raise KubeError(0, f"{source} could not be loaded") from exc
         try:
             async with asyncio.timeout(KUBE_TIMEOUT_SECONDS):
                 return await request(api)
