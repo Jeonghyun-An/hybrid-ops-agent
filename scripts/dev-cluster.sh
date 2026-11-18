@@ -67,7 +67,8 @@ cmd_up() {
     kind create cluster --name "${CLUSTER}" --image "${NODE_IMAGE}" \
       --config deploy/kind/kind-config.yaml --wait 120s
   fi
-  docker build -f demo_app/Dockerfile -t "${DEMO_IMAGE}" .
+  docker build -f deploy/docker/Dockerfile --build-arg PACKAGE=hoa-demo --build-arg MEMBER=demo_app \
+    -t "${DEMO_IMAGE}" .
   kind load docker-image "${DEMO_IMAGE}" --name "${CLUSTER}"
   k apply -f deploy/kind/demo/
   k apply -f deploy/kind/rbac/
