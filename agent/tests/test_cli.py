@@ -3,6 +3,7 @@ import json
 import httpx
 import openai
 import pytest
+from fastapi import FastAPI
 
 from hoa_agent import __version__
 from hoa_agent.cli import main
@@ -111,3 +112,43 @@ def test_failures_map_to_exit_codes(
 
     assert main(["investigate", "x"], investigator=fake) == code
     assert str(error) in capsys.readouterr().err
+
+
+def never_serve(app: object, **kwargs: object) -> None:
+    raise AssertionError("must not start the server")
+
+
+def test_serve_needs_the_mcp_url(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["serve"], env={}, run_server=never_serve) == 2
+    assert "HOA_MCP_URL is not set" in capsys.readouterr().err
+
+
+def test_serve_runs_the_api_on_the_given_port() -> None:
+    calls: list[tuple[object, dict[str, object]]] = []
+
+    def fake_run(app: object, **kwargs: object) -> None:
+        calls.append((app, kwargs))
+
+    env = {"HOA_MCP_URL": "http://hoa-mcp-k8s-read.hoa-system.svc/mcp", "HOA_MODEL": "gemini"}
+    assert main(["serve", "--port", "9000"], env=env, run_server=fake_run) == 0
+
+    [(app, kwargs)] = calls
+    assert isinstance(app, FastAPI)
+    assert kwargs == {"host": "127.0.0.1", "port": 9000}
+
+
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        ({"HOA_MODEL": "gpt"}, "HOA_MODEL must be one of gemma, gemini"),
+        ({"HOA_INVESTIGATION_TIMEOUT": "soon"}, "HOA_INVESTIGATION_TIMEOUT must be"),
+        ({"HOA_INVESTIGATION_TIMEOUT": "0"}, "HOA_INVESTIGATION_TIMEOUT must be"),
+        ({"HOA_INVESTIGATION_TIMEOUT": "nan"}, "HOA_INVESTIGATION_TIMEOUT must be"),
+    ],
+)
+def test_serve_refuses_bad_settings(
+    capsys: pytest.CaptureFixture[str], extra: dict[str, str], message: str
+) -> None:
+    env = {"HOA_MCP_URL": "http://hoa-mcp-k8s-read.hoa-system.svc/mcp", **extra}
+    assert main(["serve"], env=env, run_server=never_serve) == 2
+    assert message in capsys.readouterr().err
