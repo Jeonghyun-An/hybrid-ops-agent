@@ -215,7 +215,9 @@ async def test_an_unclassified_error_is_a_500_with_only_its_type() -> None:
     assert response.json() == {"error": {"kind": "internal_error", "message": "KeyError"}}
 
 
-async def test_a_timeout_error_that_is_not_ours_is_a_500() -> None:
+async def test_a_timeout_error_that_is_not_ours_is_a_500(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     async def leaking(alert: str) -> InvestigationResult:
         raise TimeoutError("inner deadline")
 
@@ -224,6 +226,8 @@ async def test_a_timeout_error_that_is_not_ours_is_a_500() -> None:
 
     assert response.status_code == 500
     assert response.json()["error"]["kind"] == "internal_error"
+    logged = [r.exc_info[1] for r in caplog.records if r.exc_info and r.exc_info[1]]
+    assert [error.args for error in logged] == [("inner deadline",)]
 
 
 @pytest.mark.parametrize(

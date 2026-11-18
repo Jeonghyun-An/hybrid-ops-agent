@@ -130,6 +130,8 @@ def serve_command(
     logging.basicConfig(
         level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
+    # basicConfig는 핸들러가 이미 있으면 아무것도 안 한다(pytest 등) — 루트 수준을 직접 못 박는다
+    logging.getLogger().setLevel(logging.WARNING)
     logging.getLogger("hoa_agent").setLevel(logging.INFO)
     logging.getLogger("uvicorn.access").addFilter(SkipHealthChecks())
     run_server(create_app(investigate, timeout_seconds=timeout), host=args.host, port=args.port)

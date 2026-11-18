@@ -77,10 +77,10 @@ def create_app(investigate: Investigate, *, timeout_seconds: float) -> FastAPI:
             try:
                 async with asyncio.timeout(timeout_seconds) as deadline:
                     result = await investigate(request.alert)
-            except TimeoutError:
+            except TimeoutError as exc:
                 if not deadline.expired():
                     # 우리 제한 시간이 아닌 TimeoutError — 분류 밖 예외와 같게 다룬다
-                    return crashed(TimeoutError())
+                    return crashed(exc)
                 logger.warning("investigation timed out after %gs", timeout_seconds)
                 return error_response(
                     504,
@@ -93,6 +93,7 @@ def create_app(investigate: Investigate, *, timeout_seconds: float) -> FastAPI:
                 logger.warning("investigation failed: %s", kind.value, exc_info=exc)
                 return error_response(HTTP_STATUSES[kind], kind.value, public_message(kind, exc))
             except Exception as exc:
+                # 시스템 경계 — 분류 밖 예외도 500으로 응답한다(MCP 서버의 reported와 같은 이유)
                 return crashed(exc)
         logger.info(
             "investigation done: cause=%s stop=%s seconds=%.1f alert=%r",

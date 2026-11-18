@@ -64,8 +64,9 @@ async def run_investigation(
     except (BaseExceptionGroup, McpError, httpx.HTTPError) as exc:
         # 작업 그룹이 묶어 올린 예외를 풀고, MCP 서버 시작 실패는 설정 오류로 바꾼다
         error = surfaced(exc)
-        # 새로 만든 설정 오류는 원인을 잇고, 풀어 낸 잎 예외는 그대로 올린다
-        raise error from (exc if isinstance(error, MCPSetupError) else None)
+        # 새로 만든 설정 오류는 묶음 예외를 원인으로 잇는다. 풀어 낸 잎 예외는 자기 원인을
+        # 유지하고(openai가 잇는 httpx 오류 등) 작업 그룹 문맥만 숨긴다
+        raise error from (exc if isinstance(error, MCPSetupError) else error.__cause__)
     if final.diagnosis is None or final.stop_reason is None:
         raise DiagnosisSchemaError("the investigation ended without a diagnosis")
     return build_result(

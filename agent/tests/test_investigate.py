@@ -109,7 +109,21 @@ async def test_a_new_setup_error_keeps_the_original_as_its_cause(
 
 
 @pytest.mark.anyio
-async def test_an_unwrapped_leaf_is_raised_without_a_chained_cause(
+async def test_an_unwrapped_leaf_keeps_its_own_cause(monkeypatch: pytest.MonkeyPatch) -> None:
+    refused = httpx.ConnectError("connection refused")
+    leaf = RuntimeError("model down")
+    leaf.__cause__ = refused
+    break_mcp(monkeypatch, leaf)
+
+    with pytest.raises(RuntimeError) as raised:
+        await run_investigation("alert", "gemma", {})
+
+    assert raised.value is leaf
+    assert raised.value.__cause__ is refused
+
+
+@pytest.mark.anyio
+async def test_an_unwrapped_leaf_without_a_cause_hides_the_group_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     break_mcp(monkeypatch, RuntimeError("model down"))

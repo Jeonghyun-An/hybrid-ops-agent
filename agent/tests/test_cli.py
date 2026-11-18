@@ -162,7 +162,7 @@ def test_serve_refuses_a_non_http_mcp_url(capsys: pytest.CaptureFixture[str], ur
     assert "must be an http:// or https:// URL" in capsys.readouterr().err
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def clean_logging() -> Iterator[None]:
     names = ("", "httpx", "hoa_agent", "uvicorn.access")
     saved = [
@@ -170,6 +170,8 @@ def clean_logging() -> Iterator[None]:
         for n in names
     ]
     handlers = list(logging.getLogger().handlers)
+    # 루트가 DEBUG에서 시작해야 serve가 WARNING으로 올리는지 검사가 의미가 있다
+    logging.getLogger().setLevel(logging.DEBUG)
     yield
     for logger, level, filters in saved:
         logger.setLevel(level)
