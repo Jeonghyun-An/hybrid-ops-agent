@@ -6,28 +6,10 @@ import pytest
 
 from hoa_agent import __version__
 from hoa_agent.cli import main
-from hoa_agent.diagnosis import Diagnosis
 from hoa_agent.graph import DiagnosisSchemaError
 from hoa_agent.llm import LLMConfigError
 from hoa_agent.mcp_tools import MCPSetupError
-from hoa_agent.result import InvestigationResult, ToolStep, Usage
-
-
-@pytest.fixture
-def result(diagnosis: Diagnosis) -> InvestigationResult:
-    return InvestigationResult(
-        model="gemini-3.5-flash",
-        alert="orders rollout stuck",
-        diagnosis=diagnosis,
-        stop_reason="answered",
-        steps=[
-            ToolStep(tool="list_pods", args={}, output="{}", error=False, executed=True),
-            ToolStep(tool="get_events", args={}, output="Not run", error=True, executed=False),
-        ],
-        invalid_tool_calls=0,
-        usage=Usage(model_calls=2, input_tokens=1_500, output_tokens=200, total_tokens=1_700),
-        elapsed_seconds=4.2,
-    )
+from hoa_agent.result import InvestigationResult
 
 
 def test_version_flag_prints_name_and_version(capsys: pytest.CaptureFixture[str]) -> None:

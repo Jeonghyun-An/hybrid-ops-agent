@@ -4,18 +4,15 @@ import io
 import sys
 from collections.abc import Awaitable, Callable, Sequence
 
-import openai
-
 from hoa_agent import __version__
-from hoa_agent.graph import DiagnosisSchemaError
+from hoa_agent.failures import EXIT_CODES, KNOWN_FAILURES, FailureKind, classify, operator_message
 from hoa_agent.investigate import run_investigation
-from hoa_agent.llm import DEFAULT_MODEL, MODEL_NAMES, LLMConfigError
-from hoa_agent.mcp_tools import MCPSetupError
+from hoa_agent.llm import DEFAULT_MODEL, MODEL_NAMES
 from hoa_agent.result import InvestigationResult
 
 Investigator = Callable[[str, str], Awaitable[InvestigationResult]]
 # 평가 러너(hoa_eval.agent.RATE_LIMITED_EXIT)가 이 값으로 남은 회차를 멈춘다
-RATE_LIMITED_EXIT = 3
+RATE_LIMITED_EXIT = EXIT_CODES[FailureKind.LLM_RATE_LIMITED]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,15 +58,10 @@ def use_utf8_output() -> None:
 def investigate_command(args: argparse.Namespace, investigator: Investigator) -> int:
     try:
         result = asyncio.run(investigator(args.alert, args.model))
-    except (LLMConfigError, MCPSetupError) as exc:
-        print(f"hoa: {exc}", file=sys.stderr)
-        return 2
-    except openai.RateLimitError as exc:
-        print(f"hoa: the LLM rate limit was hit — {exc}", file=sys.stderr)
-        return RATE_LIMITED_EXIT
-    except (DiagnosisSchemaError, openai.OpenAIError) as exc:
-        print(f"hoa: investigation failed — {type(exc).__name__}: {exc}", file=sys.stderr)
-        return 1
+    except KNOWN_FAILURES as exc:
+        kind = classify(exc)
+        print(f"hoa: {operator_message(kind, exc)}", file=sys.stderr)
+        return EXIT_CODES[kind]
     print(result.model_dump_json(indent=2))
     if not args.json:
         print(render_summary(result), file=sys.stderr)

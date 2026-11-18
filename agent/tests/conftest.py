@@ -1,5 +1,7 @@
 from collections.abc import Callable, Sequence
 
+import httpx
+import openai
 import pytest
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseChatModel
@@ -10,6 +12,7 @@ from langchain_core.tools import BaseTool
 from pydantic import Field
 
 from hoa_agent.diagnosis import CauseLabel, Diagnosis, Evidence
+from hoa_agent.result import InvestigationResult, ToolStep, Usage
 
 
 class ScriptedChatModel(BaseChatModel):
@@ -112,3 +115,27 @@ def make_tool_call() -> Callable[..., dict[str, object]]:
 @pytest.fixture
 def make_reply() -> Callable[..., AIMessage]:
     return reply
+
+
+@pytest.fixture
+def result(diagnosis: Diagnosis) -> InvestigationResult:
+    return InvestigationResult(
+        model="gemini-3.5-flash",
+        alert="orders rollout stuck",
+        diagnosis=diagnosis,
+        stop_reason="answered",
+        steps=[
+            ToolStep(tool="list_pods", args={}, output="{}", error=False, executed=True),
+            ToolStep(tool="get_events", args={}, output="Not run", error=True, executed=False),
+        ],
+        invalid_tool_calls=0,
+        usage=Usage(model_calls=2, input_tokens=1_500, output_tokens=200, total_tokens=1_700),
+        elapsed_seconds=4.2,
+    )
+
+
+@pytest.fixture
+def rate_limit_error() -> openai.RateLimitError:
+    request = httpx.Request("POST", "https://llm.test/v1/chat/completions")
+    response = httpx.Response(429, request=request)
+    return openai.RateLimitError("quota exceeded", response=response, body=None)
