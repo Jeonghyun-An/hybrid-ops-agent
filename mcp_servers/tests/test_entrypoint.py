@@ -33,3 +33,18 @@ def test_entrypoint_without_kubeconfig_exits_2() -> None:
     result = subprocess.run([entrypoint()], env=env, capture_output=True, text=True, timeout=60)
     assert result.returncode == 2
     assert "HOA_MCP_KUBECONFIG is not set" in result.stderr
+
+
+def test_http_entrypoint_without_allowed_hosts_exits_2(
+    tmp_path: Path, kubeconfig_text: str
+) -> None:
+    kubeconfig = tmp_path / "read.kubeconfig"
+    kubeconfig.write_text(kubeconfig_text, encoding="utf-8")
+    env = {
+        **{k: v for k, v in os.environ.items() if k != "HOA_MCP_ALLOWED_HOSTS"},
+        "HOA_MCP_KUBECONFIG": str(kubeconfig),
+        "HOA_MCP_TRANSPORT": "http",
+    }
+    result = subprocess.run([entrypoint()], env=env, capture_output=True, text=True, timeout=60)
+    assert result.returncode == 2
+    assert "HOA_MCP_ALLOWED_HOSTS is required" in result.stderr

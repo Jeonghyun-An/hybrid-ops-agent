@@ -8,8 +8,11 @@ from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import Field
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
 
 from hoa_mcp.k8s_read.budget import OutputTooLarge, fit
 from hoa_mcp.k8s_read.convert import (
@@ -22,7 +25,7 @@ from hoa_mcp.k8s_read.convert import (
 )
 from hoa_mcp.k8s_read.kube import ApiKubeReader, KubeError, KubeReader
 from hoa_mcp.k8s_read.models import DeploymentView, EventList, PodList, PodLogs
-from hoa_mcp.k8s_read.settings import ServerSettings, SettingsError, load_settings
+from hoa_mcp.k8s_read.settings import ServerSettings, SettingsError, Transport, load_settings
 
 INSTRUCTIONS = (
     "Read-only Kubernetes tools for diagnosing workloads. "
@@ -54,8 +57,27 @@ def reported[**P, R](tool: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R
 
 
 def build_server(reader: KubeReader, settings: ServerSettings) -> FastMCP:
-    # 요청마다 남는 INFO 줄이 hoa investigate의 표준오류를 덮지 않게 경고 이상만 남긴다
-    server = FastMCP("hoa-k8s-read", instructions=INSTRUCTIONS, log_level="WARNING")
+    server = FastMCP(
+        "hoa-k8s-read",
+        instructions=INSTRUCTIONS,
+        # 요청마다 남는 INFO 줄이 hoa investigate의 표준오류를 덮지 않게 경고 이상만 남긴다
+        log_level="WARNING",
+        # 아래는 HTTP 전송(클러스터 안 파드)에서만 쓰인다
+        host="0.0.0.0",
+        port=settings.port,
+        # 에이전트가 조사마다 연결을 열고 닫는다 — 세션을 쥐지 않아 복제본을 늘려도 된다
+        stateless_http=True,
+        json_response=True,
+        # 0.0.0.0에 묶으면 FastMCP가 Host 검사(DNS 리바인딩 방어)를 저절로 켜지 않는다
+        transport_security=TransportSecuritySettings(
+            allowed_hosts=list(settings.allowed_hosts), allowed_origins=[]
+        ),
+    )
+
+    @server.custom_route("/healthz", methods=["GET"])
+    async def healthz(request: Request) -> PlainTextResponse:
+        """프로브용 — 쿠버네티스 API를 부르지 않는다(kubelet 프로브의 Host는 파드 IP다)."""
+        return PlainTextResponse("ok")
 
     def check_namespace(namespace: str) -> None:
         if namespace not in settings.allowed_namespaces:
@@ -144,4 +166,5 @@ def main() -> None:
     except SettingsError as exc:
         print(f"hoa-mcp-k8s-read: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
-    build_server(ApiKubeReader(settings.kubeconfig), settings).run("stdio")
+    server = build_server(ApiKubeReader(settings.kubeconfig), settings)
+    server.run("streamable-http" if settings.transport is Transport.HTTP else "stdio")
