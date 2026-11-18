@@ -49,8 +49,8 @@ round01b까지 kind에 일반 YAML로 올리던 데모 앱과, 개발 PC에서�
 
 ## 4. 준비물과 환경
 
-- **helm**: 개발 PC 호스트에 설치한다. kind와 통합 테스트는 호스트에서 돈다 — devcontainer 안에서는 kind API 주소에 닿지 않는다(`GIT_WORKFLOW.md` §개발 환경). 같은 버전을 devcontainer 기능 옵션, CI 다운로드 URL, 문서에 고정한다(버전은 plan에서 정한다).
-- **kubeconform**: CI에만 둔다. 버전을 다운로드 URL에 고정한다.
+- **helm**: 개발 PC 호스트에 설치한다. kind와 통합 테스트는 호스트에서 돈다 — devcontainer 안에서는 kind API 주소에 닿지 않는다(`GIT_WORKFLOW.md` §개발 환경). 같은 버전(v4.3.2)을 devcontainer 기능 옵션, CI 다운로드 URL·체크섬, `scripts/dev-cluster.sh`, 문서에 고정한다. Helm 4는 새 릴리스를 server-side apply로 올린다(§5.5).
+- **kubeconform**: CI에만 둔다. 버전(v0.8.0)과 체크섬을 다운로드 단계에 고정하고, 스키마는 쿠버네티스 v1.37.0(kind 노드와 같다)으로 본다.
 - **기존 kind 클러스터**: kubectl로 만든 리소스에는 Helm 소유 표시가 없어 `helm install`이 거절한다. 전환할 때 한 번 `down` → `up`한다(README·완료노트에 안내).
 - **LLM 설정**: `.env`(커밋하지 않는다)에서 `HOA_GEMMA_BASE_URL`·`GEMINI_API_KEY`·`HOA_GEMINI_MODEL`만 골라 클러스터 안 Secret `hoa-agent-llm`으로 만든다. 회사 vLLM 주소가 클러스터 안 Secret에만 생기고 저장소에는 남지 않는다. 만드는 과정에서 값을 출력하지 않는다.
 - **kind 파드에서 회사 vLLM**: 개발 PC가 회사망 안이면 Docker Desktop NAT를 거쳐 닿을 것으로 본다. 스모크 전에 확인한다(§8).
@@ -143,7 +143,7 @@ round01b까지 kind에 일반 YAML로 올리던 데모 앱과, 개발 PC에서�
   8. MCP용 kubeconfig를 쓴다.
 - **`reset`**: 데모 앱 차트를 다시 `helm upgrade --install`하고, rollout restart → rollout 대기 → 종료 중인 파드가 사라질 때까지 기다린다(`wait_settled`).
 - **평가 러너 복구**(`eval/src/hoa_eval/cluster.py`): `kubectl apply -f deploy/kind/demo` 대신 같은 helm 명령을 쓴다. 릴리스 이름·차트·값 경로는 스크립트와 러너 두 곳에 같은 값으로 두고, 통합 테스트가 두 경로를 다 돌린다. 평가 러너가 관리자 컨텍스트로 장애를 주입·복구하는 예외(코딩 표준)에 helm도 들어간다. 컨텍스트는 `--kube-context kind-hoa`로 명시한다.
-- **helm이 장애를 되돌리는지**: 장애 패치는 이미지 태그·환경변수 값처럼 차트에 이미 있는 필드만 바꾼다(지금 규칙). helm upgrade가 그 필드를 차트 값으로 되돌리는지는 helm 버전과 적용 방식(3-way merge / server-side apply)에 따라 다를 수 있다. plan에서 고정한 버전으로 확인하고, 그 뒤로는 CI의 「스크립트 장애 주입·복구」 단계가 계속 증명한다.
+- **helm이 장애를 되돌리는 방법**: Helm 4는 새 릴리스를 server-side apply로 올린다. `kubectl patch`(장애 주입)는 바꾼 필드의 소유자를 가져가므로, 기준 상태로 되돌리는 `helm upgrade`는 그 필드에서 충돌한다. 그래서 설치·복구 명령은 모두 `--server-side=true --force-conflicts`를 줘서 차트 값으로 그 필드를 되찾는다(plan 작성 중 helm v4.3.2 소스로 확인, 구현 때 실제로 확인). 장애 패치는 지금처럼 차트에 이미 있는 필드(이미지 태그·환경변수 값)만 바꾼다. CI의 「스크립트 장애 주입·복구」 단계가 계속 증명한다.
 - **남기고 지우는 것**: `deploy/kind/kind-config.yaml`과 `deploy/kind/faults/`는 그대로 둔다(시나리오 YAML의 패치 경로 규칙도 그대로). `deploy/kind/demo/`·`deploy/kind/rbac/`는 지운다.
 
 ## 6. 테스트·CI
@@ -204,9 +204,9 @@ round01b까지 kind에 일반 YAML로 올리던 데모 앱과, 개발 PC에서�
 | 위험 | 대응 |
 |---|---|
 | kind 파드에서 회사 vLLM에 닿지 않는다(Docker Desktop NAT·사내 방화벽) | 스모크 전에 파드 안에서 확인한다. 안 되면 kind 스모크는 Gemini로 하고, 클러스터 안 Gemma 확인은 round02b(k3s가 같은 서버)로 넘긴다. 완료노트에 그대로 적는다 |
-| helm 버전에 따라 upgrade가 장애 패치를 되돌리지 않는다(3-way merge와 server-side apply의 차이) | plan에서 고정 버전으로 확인한다. 안 되면 복구를 「장애 패치를 거꾸로 적용」이나 `--force` 같은 방식으로 바꾸고 이유를 남긴다. CI 주입·복구 단계가 계속 지킨다 |
-| kind 기본 CNI가 NetworkPolicy를 지키지 않는다 | plan에서 확인한다. 안 지키면 그 통합 확인을 빼고 완료노트에 적은 뒤, k3s(02b)에서 확인한다. 정책 객체 자체는 차트 정책 테스트가 지킨다 |
-| kubeconform 스키마 저장소가 쿠버네티스 1.37을 아직 내지 않았다 | plan에서 확인한다. 없으면 가장 가까운 버전으로 고정하고 이유를 남긴다 |
+| 장애 패치가 가져간 필드를 helm upgrade가 되찾지 못한다 | `--server-side=true --force-conflicts`(§5.5). 그래도 안 되면 복구를 「장애 패치를 거꾸로 적용」으로 바꾸고 이유를 남긴다. CI 주입·복구 단계가 계속 지킨다 |
+| kind 기본 CNI가 NetworkPolicy를 지키지 않는다 | kind v0.24부터 기본 CNI(kindnet)가 NetworkPolicy를 지킨다(릴리스 노트, 2026-11-17 확인). 통합 테스트가 막히는지 직접 본다. 안 지키면 그 확인을 빼고 완료노트에 적은 뒤 k3s(02b)에서 확인한다. 정책 객체 자체는 차트 정책 테스트가 지킨다 |
+| kubeconform 스키마가 쿠버네티스 1.37과 맞지 않는다 | 스키마 저장소에 v1.37.0이 있다(2026-11-17 확인). kind 노드를 올릴 때 `-kubernetes-version`을 같이 올린다 |
 | MCP HTTP 엔드포인트에 인증이 없다 | ClusterIP, NetworkPolicy(에이전트 파드만), 읽기 전용 RBAC, 허용 네임스페이스, 허용 Host로 막는다. MCP 인증은 클러스터 밖에서 부르는 곳이 생기는 round03에서 다시 본다 |
 | 동기 요청이 길다(Gemma 6~20초, Gemini는 더 길 수 있다) | 서버 제한 시간 300초를 두고 `curl --max-time`을 안내한다. 비동기 조사(202 + 상태 조회)는 round04 웹훅 때 다시 정한다 |
 | 회사 vLLM 주소가 Secret을 만드는 과정에서 샌다 | 필요한 키만 임시 파일(권한 600)에 골라 `--from-env-file`로 만들고 값을 출력하지 않는다. 커밋 전에 직접 확인한다(`CLAUDE.md` §2) |
