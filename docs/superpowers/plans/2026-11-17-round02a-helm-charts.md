@@ -25,6 +25,7 @@
 - **Helm `required`**: 빈 문자열도 빠진 값으로 본다 — 차트 기본값을 `""`로 두고 티어 값 파일이 채우게 한다.
 - **NetworkPolicy**: 파드가 자기가 도는 노드에서 오는 트래픽과 localhost는 막지 못한다(쿠버네티스 문서 「What you can't do」). 그래서 kubelet 프로브와 `kubectl port-forward`는 정책 밖이다.
 - **확인 범위**: 위의 FastMCP HTTP 동작만 스크래치에서 실제로 돌렸다. 나머지 코드는 이 plan의 TDD 단계에서 처음 돈다 — 단계의 기대 출력과 다르면 멈추고 원인을 본다.
+- **구현 중 바뀐 것(2026-11-18)**: Task 2~4의 코드 품질 리뷰를 반영해(커밋 `e2e02df`) MCP 서버 코드가 아래 Task 2~4의 코드 블록과 다르다 — in-cluster 토큰을 시작할 때 확인(`check_in_cluster`, 실패하면 종료 코드 2), 바인드 주소 `HOA_MCP_HOST`(기본 `127.0.0.1`), `ServerSettings.kube_auth`, 401 안내를 인증 방식별로, 포트 검사 `isdecimal`, 테스트 보강(`tests/test_main.py` 등). Task 11의 MCP 차트는 `HOA_MCP_HOST=0.0.0.0`을 준다. 교본은 실제 파일을 싣는다.
 
 **선행 완료:** 작업 브랜치 `feat/round02a-helm-charts`(`dev` `72a050a`에서 분기, spec 커밋 `d4454f5`, 승인 표시 `5c010b4`, push됨). 개발 PC에 Docker Desktop·kind v0.33.0·kubectl·uv가 있다. 저장소 루트의 `.env`(커밋 안 함)에 `HOA_GEMMA_BASE_URL`·`GEMINI_API_KEY`가 있다. **호스트 helm은 아직 없다 — Task 1에서 사용자가 설치한다.**
 
@@ -2273,6 +2274,7 @@ def test_mcp_server_accepts_only_its_service_name_and_port_forwards(
     ]
     assert env_of(server)["HOA_MCP_KUBE_AUTH"] == "in-cluster"
     assert env_of(server)["HOA_MCP_TRANSPORT"] == "http"
+    assert env_of(server)["HOA_MCP_HOST"] == "0.0.0.0"
 ```
 
 - [ ] **Step 2: 실패 확인**
@@ -2438,6 +2440,9 @@ spec:
               value: http
             - name: HOA_MCP_KUBE_AUTH
               value: in-cluster
+            # 파드 밖(에이전트 파드)에서 오는 연결을 받으려면 모든 인터페이스에 묶는다 — 서버 기본값은 127.0.0.1
+            - name: HOA_MCP_HOST
+              value: "0.0.0.0"
             - name: HOA_MCP_PORT
               value: {{ .Values.port | quote }}
             # RoleBinding과 같은 값에서 나온다 — RBAC과 서버의 허용 목록이 어긋나지 않게
@@ -4432,7 +4437,7 @@ curl --max-time 330 -s -X POST http://127.0.0.1:8080/investigations -H 'content-
 - **날짜**: 2026-11-17 (round02a, plan을 쓰며 스크래치에서 확인)
 - **증상**: 클러스터 안 MCP 서버를 `host="0.0.0.0"`으로 열면 아무 Host 헤더나 받는다. 반대로 기본값(`127.0.0.1`)으로 두면 Service 이름(`hoa-mcp-k8s-read.hoa-system.svc`)으로 온 요청이 `421 Invalid Host header`로 거절된다.
 - **원인**: FastMCP(mcp 1.30)는 `host`가 localhost일 때만 허용 Host(`127.0.0.1:*`·`localhost:*`)를 저절로 설정한다. 허용 값은 정확히 같은 문자열이거나 `<호스트>:*`(Host에 포트가 붙을 때만 맞는다)라서, 포트 없이 부르는 Service 이름은 `:*` 패턴에 걸리지 않는다.
-- **해결**: `transport_security=TransportSecuritySettings(allowed_hosts=…)`를 명시하고, 차트가 Service 이름(포트 없이)과 포트포워드용 `127.0.0.1:*`·`localhost:*`를 `HOA_MCP_ALLOWED_HOSTS`로 넘긴다. 비어 있으면 서버가 시작하지 않는다. `/healthz`(`custom_route`)는 이 검사를 거치지 않는다 — kubelet 프로브의 Host는 파드 IP다.
+- **해결**: `transport_security=TransportSecuritySettings(allowed_hosts=…)`를 명시하고, 차트가 Service 이름(포트 없이)과 포트포워드용 `127.0.0.1:*`·`localhost:*`를 `HOA_MCP_ALLOWED_HOSTS`로 넘긴다. 비어 있으면 서버가 시작하지 않는다. `/healthz`(`custom_route`)는 이 검사를 거치지 않는다 — kubelet 프로브의 Host는 파드 IP다. 허용 Host는 접근 제어가 아니다(LAN의 누구나 `Host: 127.0.0.1:1`을 보낼 수 있다) — 그래서 바인드 주소는 `HOA_MCP_HOST`(기본 `127.0.0.1`)로 따로 두고, 차트가 파드 안에서만 `0.0.0.0`을 준다.
 - **재발 방지**: `mcp_servers/tests/test_http.py`(허용 밖 Host 421)와 통합 테스트 `test_in_cluster.py`가 지킨다. Service 이름이나 포트를 바꾸면 차트 정책 테스트가 에이전트의 `HOA_MCP_URL` Host가 허용 목록에 있는지 본다.
 ```
 

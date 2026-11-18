@@ -94,14 +94,14 @@ round01b까지 kind에 일반 YAML로 올리던 데모 앱과, 개발 PC에서�
 ### 5.3 MCP 서버 — HTTP 전송과 클러스터 안 인증
 
 - **전송** `HOA_MCP_TRANSPORT=stdio|http`(기본 `stdio` — 개발 PC CLI와 평가 러너는 바뀌지 않는다).
-  - `http`는 FastMCP streamable HTTP로 `0.0.0.0:${HOA_MCP_PORT:-8080}`의 `/mcp`에 연다.
+  - `http`는 FastMCP streamable HTTP로 `${HOA_MCP_HOST:-127.0.0.1}:${HOA_MCP_PORT:-8080}`의 `/mcp`에 연다. 차트가 파드 안에서 `HOA_MCP_HOST=0.0.0.0`을 준다. 기본값을 루프백으로 둔 것은 개발 PC에서 HTTP 모드를 띄워도 LAN에 열리지 않게 하려는 것이다 — 허용 Host는 접근 제어가 아니다(구현 리뷰 반영, 2026-11-18).
   - `stateless_http=True`로 둔다. 에이전트가 조사마다 연결을 열고 닫으므로 서버가 세션을 쥘 필요가 없고, 복제본이 늘어도 세션을 한 파드에 고정하지 않아도 된다.
   - 진행 알림을 스트리밍하지 않으므로 응답은 JSON(`json_response=True`)으로 둔다.
   - 프로브용 `/healthz`를 둔다. 쿠버네티스 API를 부르지 않는다.
 - **DNS 리바인딩 보호**: FastMCP(mcp 1.30)는 localhost에 묶을 때만 허용 Host 검사를 저절로 켠다. `0.0.0.0`에 묶으면 꺼지므로 `HOA_MCP_ALLOWED_HOSTS`(차트가 Service 이름들과 포트포워드용 `127.0.0.1:*`·`localhost:*`로 채운다)를 명시해 켠다. `http`인데 이 값이 비면 설정 오류로 시작하지 않는다.
 - **인증** `HOA_MCP_KUBE_AUTH=kubeconfig|in-cluster`(기본 `kubeconfig`).
   - `kubeconfig`는 지금 규칙 그대로다. `HOA_MCP_KUBECONFIG`가 필요하고 컨텍스트가 정확히 1개여야 한다.
-  - `in-cluster`는 파드의 ServiceAccount 토큰을 쓴다(`kubernetes_asyncio`의 `load_incluster_config`). 이때 `HOA_MCP_KUBECONFIG`가 함께 있으면 설정 오류다. 투영된 SA 토큰은 주기적으로 바뀌므로, 클라이언트가 토큰 파일을 다시 읽는지 plan에서 확인한다.
+  - `in-cluster`는 파드의 ServiceAccount 토큰을 쓴다(`kubernetes_asyncio`의 `load_incluster_config`). 이때 `HOA_MCP_KUBECONFIG`가 함께 있으면 설정 오류다. 시작할 때 토큰을 한 번 읽어 보고, 없으면 원인과 함께 종료 코드 2로 끝난다 — 파드가 Ready인데 도구만 모두 실패하는 상태를 막는다(구현 리뷰 반영). 투영된 SA 토큰은 주기적으로 바뀌므로 호출마다 토큰 파일을 다시 읽는다.
 - 도구 4개, 허용 네임스페이스 검사, 출력 상한, 비밀값 가리기는 그대로다.
 
 ### 5.4 에이전트 HTTP API — `hoa serve`
