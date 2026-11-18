@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from hoa_mcp.k8s_read.settings import SettingsError, load_settings
+from hoa_mcp.k8s_read.settings import KubeAuth, SettingsError, Transport, load_settings
 
 
 def write_kubeconfig(tmp_path: Path, text: str) -> Path:
@@ -57,3 +57,76 @@ def test_kubeconfig_that_is_not_yaml_is_refused(tmp_path: Path) -> None:
     kubeconfig = write_kubeconfig(tmp_path, "clusters: [unclosed\n")
     with pytest.raises(SettingsError, match="not valid YAML"):
         load_settings({"HOA_MCP_KUBECONFIG": str(kubeconfig)})
+
+
+def test_defaults_are_stdio_with_a_kubeconfig(tmp_path: Path, kubeconfig_text: str) -> None:
+    kubeconfig = write_kubeconfig(tmp_path, kubeconfig_text)
+    settings = load_settings({"HOA_MCP_KUBECONFIG": str(kubeconfig)})
+    assert settings.transport is Transport.STDIO
+    assert settings.port == 8080
+    assert settings.allowed_hosts == ()
+
+
+def test_http_transport_reads_port_and_allowed_hosts(tmp_path: Path, kubeconfig_text: str) -> None:
+    kubeconfig = write_kubeconfig(tmp_path, kubeconfig_text)
+    settings = load_settings(
+        {
+            "HOA_MCP_KUBECONFIG": str(kubeconfig),
+            "HOA_MCP_TRANSPORT": "http",
+            "HOA_MCP_PORT": "9000",
+            "HOA_MCP_ALLOWED_HOSTS": "hoa-mcp-k8s-read.hoa-system.svc, 127.0.0.1:*",
+        }
+    )
+    assert settings.transport is Transport.HTTP
+    assert settings.port == 9000
+    assert settings.allowed_hosts == ("hoa-mcp-k8s-read.hoa-system.svc", "127.0.0.1:*")
+
+
+def test_http_transport_without_allowed_hosts_is_refused(
+    tmp_path: Path, kubeconfig_text: str
+) -> None:
+    kubeconfig = write_kubeconfig(tmp_path, kubeconfig_text)
+    with pytest.raises(SettingsError, match="HOA_MCP_ALLOWED_HOSTS is required"):
+        load_settings({"HOA_MCP_KUBECONFIG": str(kubeconfig), "HOA_MCP_TRANSPORT": "http"})
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "message"),
+    [
+        ("HOA_MCP_TRANSPORT", "sse", "HOA_MCP_TRANSPORT must be one of stdio, http"),
+        ("HOA_MCP_KUBE_AUTH", "token", "HOA_MCP_KUBE_AUTH must be one of kubeconfig, in-cluster"),
+        ("HOA_MCP_PORT", "eighty", "HOA_MCP_PORT must be a port number"),
+        ("HOA_MCP_PORT", "70000", "HOA_MCP_PORT must be a port number"),
+    ],
+)
+def test_bad_choices_are_refused(
+    tmp_path: Path, kubeconfig_text: str, name: str, value: str, message: str
+) -> None:
+    kubeconfig = write_kubeconfig(tmp_path, kubeconfig_text)
+    with pytest.raises(SettingsError, match=message):
+        load_settings({"HOA_MCP_KUBECONFIG": str(kubeconfig), name: value})
+
+
+def test_in_cluster_auth_needs_no_kubeconfig() -> None:
+    settings = load_settings(
+        {"HOA_MCP_KUBE_AUTH": "in-cluster", "KUBERNETES_SERVICE_HOST": "kubernetes.default.svc"}
+    )
+    assert settings.kubeconfig is None
+    assert KubeAuth.IN_CLUSTER.value == "in-cluster"
+
+
+def test_in_cluster_auth_with_a_kubeconfig_is_refused(tmp_path: Path, kubeconfig_text: str) -> None:
+    kubeconfig = write_kubeconfig(tmp_path, kubeconfig_text)
+    with pytest.raises(SettingsError, match="must be empty with HOA_MCP_KUBE_AUTH=in-cluster"):
+        load_settings(
+            {
+                "HOA_MCP_KUBE_AUTH": "in-cluster",
+                "HOA_MCP_KUBECONFIG": str(kubeconfig),
+                "KUBERNETES_SERVICE_HOST": "kubernetes.default.svc",
+            }
+        )
+
+
+def test_in_cluster_auth_outside_a_pod_is_refused() -> None:
+    with pytest.raises(SettingsError, match="only works inside a pod"):
+        load_settings({"HOA_MCP_KUBE_AUTH": "in-cluster"})
