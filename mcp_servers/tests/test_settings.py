@@ -1,8 +1,15 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
-from hoa_mcp.k8s_read.settings import KubeAuth, SettingsError, Transport, load_settings
+from hoa_mcp.k8s_read.settings import (
+    KubeAuth,
+    ServerSettings,
+    SettingsError,
+    Transport,
+    load_settings,
+)
 
 
 def write_kubeconfig(tmp_path: Path, text: str) -> Path:
@@ -192,3 +199,12 @@ def test_in_cluster_auth_treats_a_blank_kubeconfig_as_empty() -> None:
         }
     )
     assert settings.kubeconfig is None
+
+
+def test_settings_with_mismatched_auth_and_kubeconfig_are_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="exactly when kube_auth is in-cluster"):
+        ServerSettings(kubeconfig=None, allowed_namespaces=("demo",))
+    with pytest.raises(ValidationError, match="exactly when kube_auth is in-cluster"):
+        ServerSettings(
+            kubeconfig=tmp_path / "x", allowed_namespaces=("demo",), kube_auth=KubeAuth.IN_CLUSTER
+        )

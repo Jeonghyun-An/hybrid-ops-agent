@@ -3,7 +3,7 @@ from enum import StrEnum
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 DEFAULT_PORT = 8080
 DEFAULT_HOST = "127.0.0.1"
@@ -24,7 +24,6 @@ class KubeAuth(StrEnum):
 
 
 class ServerSettings(BaseModel):
-    # None이면 파드의 ServiceAccount 토큰으로 붙는다(in-cluster)
     kubeconfig: Path | None
     allowed_namespaces: tuple[str, ...]
     transport: Transport = Transport.STDIO
@@ -32,6 +31,13 @@ class ServerSettings(BaseModel):
     allowed_hosts: tuple[str, ...] = ()
     kube_auth: KubeAuth = KubeAuth.KUBECONFIG
     host: str = DEFAULT_HOST
+
+    @model_validator(mode="after")
+    def auth_matches_kubeconfig(self) -> "ServerSettings":
+        # kubeconfig가 None이면 파드의 ServiceAccount 토큰(in-cluster)으로 붙는다
+        if (self.kubeconfig is None) != (self.kube_auth is KubeAuth.IN_CLUSTER):
+            raise ValueError("kubeconfig must be None exactly when kube_auth is in-cluster")
+        return self
 
 
 def context_count(kubeconfig: Path) -> int:
@@ -97,6 +103,8 @@ def bind_host(env: Mapping[str, str]) -> str:
     if raw is None:
         return DEFAULT_HOST
     host = raw.strip()
+    # 다른 빈 값은 기본값으로 돌아가지만, 차트 값이 빈 채로 렌더링된 경우는 조용히
+    # 루프백에 묶이면 파드가 Ready가 되지 않으므로 바로 실패시킨다
     if not host:
         raise SettingsError("HOA_MCP_HOST must not be empty")
     return host

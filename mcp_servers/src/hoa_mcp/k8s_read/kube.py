@@ -107,7 +107,7 @@ class ApiKubeReader:
             async with asyncio.timeout(KUBE_TIMEOUT_SECONDS):
                 return await request(api)
         except ApiException as exc:
-            hint = EXPIRED_TOKEN_HINT if self._kubeconfig else IN_CLUSTER_TOKEN_HINT
+            hint = EXPIRED_TOKEN_HINT if self._kubeconfig is not None else IN_CLUSTER_TOKEN_HINT
             raise KubeError.from_api(exc, hint=hint) from exc
         except TimeoutError as exc:
             raise KubeError(0, f"cluster did not answer within {KUBE_TIMEOUT_SECONDS}s") from exc

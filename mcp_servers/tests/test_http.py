@@ -9,7 +9,7 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.server.fastmcp import FastMCP
 
 from hoa_mcp.k8s_read.server import build_server
-from hoa_mcp.k8s_read.settings import ServerSettings, Transport
+from hoa_mcp.k8s_read.settings import KubeAuth, ServerSettings, Transport
 
 pytestmark = pytest.mark.anyio
 
@@ -38,6 +38,7 @@ class PodsReader:
 def http_server(pods: list[V1Pod]) -> FastMCP:
     settings = ServerSettings(
         kubeconfig=None,
+        kube_auth=KubeAuth.IN_CLUSTER,
         allowed_namespaces=("demo",),
         transport=Transport.HTTP,
         allowed_hosts=(SERVICE_HOST, "127.0.0.1:*"),
@@ -91,6 +92,7 @@ async def test_port_forwarded_host_is_allowed() -> None:
 async def test_health_check_skips_the_host_check_and_the_cluster() -> None:
     settings = ServerSettings(
         kubeconfig=None,
+        kube_auth=KubeAuth.IN_CLUSTER,
         allowed_namespaces=("demo",),
         transport=Transport.HTTP,
         allowed_hosts=(SERVICE_HOST,),

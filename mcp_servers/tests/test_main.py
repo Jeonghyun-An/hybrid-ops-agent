@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -10,8 +11,9 @@ from hoa_mcp.k8s_read import server
 def run_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     calls: list[str] = []
     monkeypatch.setattr(FastMCP, "run", lambda self, transport: calls.append(transport))
-    for name in ("HOA_MCP_TRANSPORT", "HOA_MCP_KUBE_AUTH", "HOA_MCP_KUBECONFIG"):
-        monkeypatch.delenv(name, raising=False)
+    for name in list(os.environ):
+        if name.startswith(("HOA_MCP_", "KUBERNETES_SERVICE_")):
+            monkeypatch.delenv(name)
     return calls
 
 
