@@ -25,7 +25,7 @@
 - **Helm `required`**: 빈 문자열도 빠진 값으로 본다 — 차트 기본값을 `""`로 두고 티어 값 파일이 채우게 한다.
 - **NetworkPolicy**: 파드가 자기가 도는 노드에서 오는 트래픽과 localhost는 막지 못한다(쿠버네티스 문서 「What you can't do」). 그래서 kubelet 프로브와 `kubectl port-forward`는 정책 밖이다.
 - **확인 범위**: 위의 FastMCP HTTP 동작만 스크래치에서 실제로 돌렸다. 나머지 코드는 이 plan의 TDD 단계에서 처음 돈다 — 단계의 기대 출력과 다르면 멈추고 원인을 본다.
-- **구현 중 바뀐 것(2026-11-18)**: Task 2~4의 코드 품질 리뷰를 반영해(커밋 `e2e02df`) MCP 서버 코드가 아래 Task 2~4의 코드 블록과 다르다 — in-cluster 토큰을 시작할 때 확인(`check_in_cluster`, 실패하면 종료 코드 2), 바인드 주소 `HOA_MCP_HOST`(기본 `127.0.0.1`), `ServerSettings.kube_auth`, 401 안내를 인증 방식별로, 포트 검사 `isdecimal`, 테스트 보강(`tests/test_main.py` 등). Task 11의 MCP 차트는 `HOA_MCP_HOST=0.0.0.0`을 준다. 같은 원칙으로 `hoa serve --host`의 기본값도 `127.0.0.1`이고 Task 12의 에이전트 차트가 `--host 0.0.0.0`을 준다(Task 8·12에 반영). 교본은 실제 파일을 싣는다.
+- **구현 중 바뀐 것(2026-11-18)**: Task 2~4의 코드 품질 리뷰를 반영해(커밋 `e2e02df`) MCP 서버 코드가 아래 Task 2~4의 코드 블록과 다르다 — in-cluster 토큰을 시작할 때 확인(`check_in_cluster`, 실패하면 종료 코드 2), 바인드 주소 `HOA_MCP_HOST`(기본 `127.0.0.1`), `ServerSettings.kube_auth`, 401 안내를 인증 방식별로, 포트 검사 `isdecimal`, 테스트 보강(`tests/test_main.py` 등). Task 11의 MCP 차트는 `HOA_MCP_HOST=0.0.0.0`을 준다. 같은 원칙으로 `hoa serve --host`의 기본값도 `127.0.0.1`이고 Task 12의 에이전트 차트가 `--host 0.0.0.0`을 준다(Task 8·12에 반영). Task 5~8의 리뷰 반영(커밋은 그 뒤 `[Fix] 에이전트 API …`)으로 에이전트 코드도 계획서와 다르다 — MCP 연결 오류의 원인 보존(상태 코드, `from exc`), `hoa serve` 로그 수준(루트 WARNING·`hoa_agent` INFO, `/healthz` 접근 로그 거름 — httpx가 LLM 주소를 찍지 않게), `/healthz`의 `Health` 모델, 분류 밖 예외 500(`internal_error`), 요청 모델 `extra=forbid`, `HOA_MCP_URL` 스킴 검사, `RATE_LIMITED_EXIT` 제거. Task 12의 에이전트 차트는 `terminationGracePeriodSeconds`를 조사 제한 시간 + 30초로 둔다. 교본은 실제 파일을 싣는다.
 
 **선행 완료:** 작업 브랜치 `feat/round02a-helm-charts`(`dev` `72a050a`에서 분기, spec 커밋 `d4454f5`, 승인 표시 `5c010b4`, push됨). 개발 PC에 Docker Desktop·kind v0.33.0·kubectl·uv가 있다. 저장소 루트의 `.env`(커밋 안 함)에 `HOA_GEMMA_BASE_URL`·`GEMINI_API_KEY`가 있다. **호스트 helm은 아직 없다 — Task 1에서 사용자가 설치한다.**
 
@@ -2717,6 +2717,8 @@ spec:
       labels:
         {{- include "agent.selectorLabels" . | nindent 8 }}
     spec:
+      # 롤아웃·종료 때 진행 중인 조사(최대 300초)가 응답을 돌려줄 때까지 기다린다 — 기본 30초면 중간에 끊긴다
+      terminationGracePeriodSeconds: {{ add (int .Values.investigationTimeoutSeconds) 30 }}
       # 쿠버네티스 API를 부르지 않는다 — 클러스터는 MCP 도구로만 본다
       automountServiceAccountToken: false
       containers:

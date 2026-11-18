@@ -106,7 +106,7 @@ round01b까지 kind에 일반 YAML로 올리던 데모 앱과, 개발 PC에서�
 
 ### 5.4 에이전트 HTTP API — `hoa serve`
 
-- **구성**: `hoa_agent/api.py`의 FastAPI 앱 팩토리가 조사 함수를 주입받는다(테스트에서 가짜를 끼운다). `hoa serve [--port 8080]`이 uvicorn 워커 하나로 연다. `agent` 의존성에 `fastapi`·`uvicorn`을 더한다(데모 앱이 이미 잠금 파일에 올려 둔 패키지다).
+- **구성**: `hoa_agent/api.py`의 FastAPI 앱 팩토리가 조사 함수를 주입받는다(테스트에서 가짜를 끼운다). `hoa serve [--host 127.0.0.1] [--port 8080]`이 uvicorn 워커 하나로 연다. 기본 바인드는 루프백이고 차트가 파드 안에서 `--host 0.0.0.0`을 준다 — MCP 서버의 `HOA_MCP_HOST`와 같은 원칙이다(구현 리뷰 반영, 2026-11-18). `agent` 의존성에 `fastapi`·`uvicorn`을 더한다(데모 앱이 이미 잠금 파일에 올려 둔 패키지다).
 - **`POST /investigations`**
   - 본문은 `InvestigationRequest{alert: str}`(1~2,000자)이다.
   - 조사를 끝까지 돌린 뒤(동기) 200과 `InvestigationResult` JSON을 돌려준다. CLI `--json`과 같은 모양이다.
@@ -124,11 +124,13 @@ round01b까지 kind에 일반 YAML로 올리던 데모 앱과, 개발 PC에서�
   | 설정 오류(MCP 연결 실패·LLM 키·주소 없음) | 2 | 503 | `setup_error` |
   | LLM 요청 한도 | 3 | 503 | `llm_rate_limited` |
   | 제한 시간 초과 | — | 504 | `timeout` |
+  | 분류 밖 예외(버그) | traceback, 1 | 500 | `internal_error` — 메시지는 예외 종류만 |
 
 - **`GET /healthz`**: 프로세스만 본다. LLM이나 MCP가 죽었다고 에이전트를 재시작하지 않는다 — 그건 503으로 알린다.
 - **설정 검사 시점**: `hoa serve`는 시작할 때 `HOA_MCP_URL`이 없으면 종료 코드 2로 끝난다. MCP 주소는 차트가 늘 채우는 값이고, 에이전트 이미지에는 stdio로 띄울 MCP 서버가 없기 때문이다. LLM 설정은 요청 때 검사한다(503 `setup_error`). `.env` 없이 올린 kind에서도 파드는 Ready가 되고, 무엇이 없는지는 응답이 알려 준다.
 - **MCP 연결**(`mcp_tools.py`): `HOA_MCP_URL`이 있으면 `streamable_http` 연결, 없으면 지금처럼 stdio다. 그래서 개발 PC의 `hoa investigate`도 포트포워드로 클러스터 안 MCP에 붙을 수 있다. 세션 밖 예외 풀기(`sole_exception`·`surfaced`, 반복 함정 9)는 두 전송이 같은 경로를 탄다.
 - **결과 저장**: 하지 않는다. 요청마다 경보 앞부분·원인 라벨·시간·멈춘 이유를 로그 한 줄로 남긴다. 추적은 round04(OpenTelemetry → Langfuse)에서 한다.
+- **로그 수준**: 루트는 경고 이상만 내고 `hoa_agent`만 INFO로 둔다. httpx는 요청마다 전체 URL을 INFO로 찍는데, 그 URL에 회사 vLLM 주소가 들어 있다. `/healthz` 접근 로그(프로브가 몇 초마다 부른다)는 거른다(구현 리뷰 반영).
 
 ### 5.5 로컬 티어 스크립트·평가 러너
 
