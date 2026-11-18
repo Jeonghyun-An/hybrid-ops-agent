@@ -21,6 +21,8 @@ spec:
         - name: inventory
           image: hoa-demo:0.1.0
           imagePullPolicy: IfNotPresent
+          # 이미지에 CMD가 없다(deploy/docker/Dockerfile — 실행 명령은 매니페스트·차트가 정한다)
+          command: ["hoa-demo"]
           env:
             - name: HOA_DEMO_ROLE
               value: inventory
