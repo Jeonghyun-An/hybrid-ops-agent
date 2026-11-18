@@ -25,7 +25,7 @@
 - **Helm `required`**: 빈 문자열도 빠진 값으로 본다 — 차트 기본값을 `""`로 두고 티어 값 파일이 채우게 한다.
 - **NetworkPolicy**: 파드가 자기가 도는 노드에서 오는 트래픽과 localhost는 막지 못한다(쿠버네티스 문서 「What you can't do」). 그래서 kubelet 프로브와 `kubectl port-forward`는 정책 밖이다.
 - **확인 범위**: 위의 FastMCP HTTP 동작만 스크래치에서 실제로 돌렸다. 나머지 코드는 이 plan의 TDD 단계에서 처음 돈다 — 단계의 기대 출력과 다르면 멈추고 원인을 본다.
-- **구현 중 바뀐 것(2026-11-18)**: Task 2~4의 코드 품질 리뷰를 반영해(커밋 `e2e02df`) MCP 서버 코드가 아래 Task 2~4의 코드 블록과 다르다 — in-cluster 토큰을 시작할 때 확인(`check_in_cluster`, 실패하면 종료 코드 2), 바인드 주소 `HOA_MCP_HOST`(기본 `127.0.0.1`), `ServerSettings.kube_auth`, 401 안내를 인증 방식별로, 포트 검사 `isdecimal`, 테스트 보강(`tests/test_main.py` 등). Task 11의 MCP 차트는 `HOA_MCP_HOST=0.0.0.0`을 준다. 교본은 실제 파일을 싣는다.
+- **구현 중 바뀐 것(2026-11-18)**: Task 2~4의 코드 품질 리뷰를 반영해(커밋 `e2e02df`) MCP 서버 코드가 아래 Task 2~4의 코드 블록과 다르다 — in-cluster 토큰을 시작할 때 확인(`check_in_cluster`, 실패하면 종료 코드 2), 바인드 주소 `HOA_MCP_HOST`(기본 `127.0.0.1`), `ServerSettings.kube_auth`, 401 안내를 인증 방식별로, 포트 검사 `isdecimal`, 테스트 보강(`tests/test_main.py` 등). Task 11의 MCP 차트는 `HOA_MCP_HOST=0.0.0.0`을 준다. 같은 원칙으로 `hoa serve --host`의 기본값도 `127.0.0.1`이고 Task 12의 에이전트 차트가 `--host 0.0.0.0`을 준다(Task 8·12에 반영). 교본은 실제 파일을 싣는다.
 
 **선행 완료:** 작업 브랜치 `feat/round02a-helm-charts`(`dev` `72a050a`에서 분기, spec 커밋 `d4454f5`, 승인 표시 `5c010b4`, push됨). 개발 PC에 Docker Desktop·kind v0.33.0·kubectl·uv가 있다. 저장소 루트의 `.env`(커밋 안 함)에 `HOA_GEMMA_BASE_URL`·`GEMINI_API_KEY`가 있다. **호스트 helm은 아직 없다 — Task 1에서 사용자가 설치한다.**
 
@@ -1482,7 +1482,7 @@ def test_serve_runs_the_api_on_the_given_port() -> None:
 
     [(app, kwargs)] = calls
     assert isinstance(app, FastAPI)
-    assert kwargs == {"host": "0.0.0.0", "port": 9000}
+    assert kwargs == {"host": "127.0.0.1", "port": 9000}
 
 
 @pytest.mark.parametrize(
@@ -1561,7 +1561,9 @@ def build_parser() -> argparse.ArgumentParser:
     serve = commands.add_parser(
         "serve", help="조사 API를 연다(클러스터 안 — MCP 서버에 HTTP로 붙는다)"
     )
-    serve.add_argument("--host", default="0.0.0.0", help="묶을 주소(기본 0.0.0.0 — 파드 안)")
+    serve.add_argument(
+        "--host", default="127.0.0.1", help="묶을 주소(기본 127.0.0.1 — 차트가 0.0.0.0을 준다)"
+    )
     serve.add_argument("--port", type=int, default=8080, help="포트(기본 8080)")
     return parser
 ```
@@ -1647,7 +1649,7 @@ Run: `uv run pytest agent -q && uv run ruff check agent && uv run ruff format --
 Expected: 모두 통과
 
 Run: `uv run hoa serve; echo "exit=$?"`
-Expected: `hoa: HOA_MCP_URL is not set — …`, `exit=2`(셸에 `HOA_MCP_URL`을 export하지 않았을 때). 개발 PC에서는 서버를 실제로 열지 않는다 — `0.0.0.0`에 묶으면 Windows 방화벽 창이 뜬다. 실제 실행은 파드 안에서 본다(Task 13·16).
+Expected: `hoa: HOA_MCP_URL is not set — …`, `exit=2`(셸에 `HOA_MCP_URL`을 export하지 않았을 때). 기본 바인드 주소는 루프백(`127.0.0.1`)이라 개발 PC에서 띄워도 LAN에 열리지 않는다 — 차트가 파드 안에서 `--host 0.0.0.0`을 준다(MCP 서버의 `HOA_MCP_HOST`와 같은 원칙, 구현 리뷰 반영). 실제 실행은 파드 안에서 본다(Task 13·16).
 
 - [ ] **Step 5: 커밋**
 
@@ -2604,6 +2606,12 @@ def test_agent_pods_are_the_clients_the_mcp_network_policy_lets_in(
     assert all(labels.get(key) == value for key, value in allowed.items())
 
 
+def test_servers_bind_all_interfaces_only_inside_the_pod(manifests: list[Manifest]) -> None:
+    [agent] = containers(deployment(manifests, "hoa-agent"))
+    assert agent["command"][agent["command"].index("--host") + 1] == "0.0.0.0"
+    assert env_of(deployment(manifests, "hoa-mcp-k8s-read"))["HOA_MCP_HOST"] == "0.0.0.0"
+
+
 def test_nothing_in_the_cluster_may_call_the_agent_yet(manifests: list[Manifest]) -> None:
     [policy] = [
         m
@@ -2715,9 +2723,12 @@ spec:
         - name: agent
           image: {{ include "agent.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Service·kubelet 프로브가 파드 IP로 들어오므로 모든 인터페이스에 묶는다 — hoa serve 기본값은 127.0.0.1
           command:
             - hoa
             - serve
+            - --host
+            - "0.0.0.0"
             - --port
             - {{ .Values.port | quote }}
           env:
@@ -2813,7 +2824,7 @@ Run: `helm lint deploy/helm/agent --values deploy/values/kind/agent.yaml`
 Expected: `1 chart(s) linted, 0 chart(s) failed`
 
 Run: `uv run pytest -m charts -q`
-Expected: PASS(15개)
+Expected: PASS(16개)
 
 - [ ] **Step 5: 커밋**
 
