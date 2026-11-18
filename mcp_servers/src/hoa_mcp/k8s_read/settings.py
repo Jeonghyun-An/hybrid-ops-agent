@@ -6,6 +6,7 @@ import yaml
 from pydantic import BaseModel
 
 DEFAULT_PORT = 8080
+DEFAULT_HOST = "127.0.0.1"
 
 
 class SettingsError(Exception):
@@ -29,6 +30,8 @@ class ServerSettings(BaseModel):
     transport: Transport = Transport.STDIO
     port: int = DEFAULT_PORT
     allowed_hosts: tuple[str, ...] = ()
+    kube_auth: KubeAuth = KubeAuth.KUBECONFIG
+    host: str = DEFAULT_HOST
 
 
 def context_count(kubeconfig: Path) -> int:
@@ -84,9 +87,19 @@ def kubeconfig_path(env: Mapping[str, str], auth: KubeAuth) -> Path | None:
 
 def port_number(env: Mapping[str, str]) -> int:
     raw = env.get("HOA_MCP_PORT", "").strip() or str(DEFAULT_PORT)
-    if not raw.isdigit() or not 1 <= int(raw) <= 65535:
+    if not raw.isdecimal() or not 1 <= int(raw) <= 65535:
         raise SettingsError(f"HOA_MCP_PORT must be a port number, got {raw!r}")
     return int(raw)
+
+
+def bind_host(env: Mapping[str, str]) -> str:
+    raw = env.get("HOA_MCP_HOST")
+    if raw is None:
+        return DEFAULT_HOST
+    host = raw.strip()
+    if not host:
+        raise SettingsError("HOA_MCP_HOST must not be empty")
+    return host
 
 
 def load_settings(env: Mapping[str, str]) -> ServerSettings:
@@ -106,4 +119,6 @@ def load_settings(env: Mapping[str, str]) -> ServerSettings:
         transport=transport,
         port=port_number(env),
         allowed_hosts=hosts,
+        kube_auth=auth,
+        host=bind_host(env),
     )

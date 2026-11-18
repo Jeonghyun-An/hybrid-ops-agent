@@ -97,6 +97,9 @@ def test_http_transport_without_allowed_hosts_is_refused(
         ("HOA_MCP_KUBE_AUTH", "token", "HOA_MCP_KUBE_AUTH must be one of kubeconfig, in-cluster"),
         ("HOA_MCP_PORT", "eighty", "HOA_MCP_PORT must be a port number"),
         ("HOA_MCP_PORT", "70000", "HOA_MCP_PORT must be a port number"),
+        ("HOA_MCP_PORT", "0", "HOA_MCP_PORT must be a port number"),
+        ("HOA_MCP_PORT", "²", "HOA_MCP_PORT must be a port number"),
+        ("HOA_MCP_HOST", "  ", "HOA_MCP_HOST must not be empty"),
     ],
 )
 def test_bad_choices_are_refused(
@@ -112,7 +115,7 @@ def test_in_cluster_auth_needs_no_kubeconfig() -> None:
         {"HOA_MCP_KUBE_AUTH": "in-cluster", "KUBERNETES_SERVICE_HOST": "kubernetes.default.svc"}
     )
     assert settings.kubeconfig is None
-    assert KubeAuth.IN_CLUSTER.value == "in-cluster"
+    assert settings.kube_auth is KubeAuth.IN_CLUSTER
 
 
 def test_in_cluster_auth_with_a_kubeconfig_is_refused(tmp_path: Path, kubeconfig_text: str) -> None:
@@ -130,3 +133,62 @@ def test_in_cluster_auth_with_a_kubeconfig_is_refused(tmp_path: Path, kubeconfig
 def test_in_cluster_auth_outside_a_pod_is_refused() -> None:
     with pytest.raises(SettingsError, match="only works inside a pod"):
         load_settings({"HOA_MCP_KUBE_AUTH": "in-cluster"})
+
+
+def test_bind_host_defaults_to_loopback_and_can_be_overridden(
+    tmp_path: Path, kubeconfig_text: str
+) -> None:
+    kubeconfig = write_kubeconfig(tmp_path, kubeconfig_text)
+    base = {"HOA_MCP_KUBECONFIG": str(kubeconfig)}
+    assert load_settings(base).host == "127.0.0.1"
+    assert load_settings({**base, "HOA_MCP_HOST": " 0.0.0.0 "}).host == "0.0.0.0"
+
+
+def test_production_combination_reads_every_field() -> None:
+    settings = load_settings(
+        {
+            "HOA_MCP_TRANSPORT": "http",
+            "HOA_MCP_KUBE_AUTH": "in-cluster",
+            "HOA_MCP_ALLOWED_HOSTS": "hoa-mcp-k8s-read.hoa-system.svc",
+            "HOA_MCP_HOST": "0.0.0.0",
+            "HOA_MCP_ALLOWED_NAMESPACES": "demo",
+            "KUBERNETES_SERVICE_HOST": "kubernetes.default.svc",
+        }
+    )
+    assert settings.transport is Transport.HTTP
+    assert settings.kube_auth is KubeAuth.IN_CLUSTER
+    assert settings.kubeconfig is None
+    assert settings.allowed_hosts == ("hoa-mcp-k8s-read.hoa-system.svc",)
+    assert settings.host == "0.0.0.0"
+    assert settings.port == 8080
+    assert settings.allowed_namespaces == ("demo",)
+
+
+def test_whitespace_only_allowed_hosts_is_refused_with_http(
+    tmp_path: Path, kubeconfig_text: str
+) -> None:
+    kubeconfig = write_kubeconfig(tmp_path, kubeconfig_text)
+    with pytest.raises(SettingsError, match="HOA_MCP_ALLOWED_HOSTS is required"):
+        load_settings(
+            {
+                "HOA_MCP_KUBECONFIG": str(kubeconfig),
+                "HOA_MCP_TRANSPORT": "http",
+                "HOA_MCP_ALLOWED_HOSTS": " , ",
+            }
+        )
+
+
+def test_in_cluster_auth_with_a_blank_service_host_is_refused() -> None:
+    with pytest.raises(SettingsError, match="only works inside a pod"):
+        load_settings({"HOA_MCP_KUBE_AUTH": "in-cluster", "KUBERNETES_SERVICE_HOST": "  "})
+
+
+def test_in_cluster_auth_treats_a_blank_kubeconfig_as_empty() -> None:
+    settings = load_settings(
+        {
+            "HOA_MCP_KUBE_AUTH": "in-cluster",
+            "HOA_MCP_KUBECONFIG": "  ",
+            "KUBERNETES_SERVICE_HOST": "kubernetes.default.svc",
+        }
+    )
+    assert settings.kubeconfig is None

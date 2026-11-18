@@ -18,6 +18,13 @@ TOOLS_LIST = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
 MCP_ACCEPT = {"accept": "application/json, text/event-stream"}
 
 
+class NoClusterReader:
+    """어느 메서드를 불러도 실패한다 — /healthz가 클러스터를 건드리지 않는지 본다."""
+
+    def __getattr__(self, name: str) -> None:
+        raise AssertionError(f"the health check must not call {name}")
+
+
 class PodsReader:
     """list_pods만 답한다 — 이 테스트는 전송 계층을 본다."""
 
@@ -81,8 +88,16 @@ async def test_port_forwarded_host_is_allowed() -> None:
     assert names == {"list_pods", "get_events", "describe_deployment", "get_pod_logs"}
 
 
-async def test_health_check_answers_without_touching_the_cluster() -> None:
-    async with http_client(http_server([]), "10-244-0-7.pod") as client:
+async def test_health_check_skips_the_host_check_and_the_cluster() -> None:
+    settings = ServerSettings(
+        kubeconfig=None,
+        allowed_namespaces=("demo",),
+        transport=Transport.HTTP,
+        allowed_hosts=(SERVICE_HOST,),
+    )
+    server = build_server(NoClusterReader(), settings)
+    # kubelet 프로브의 Host는 파드 IP와 포트다
+    async with http_client(server, "10.244.0.7:8080") as client:
         response = await client.get("/healthz")
     assert response.status_code == 200
     assert response.text == "ok"

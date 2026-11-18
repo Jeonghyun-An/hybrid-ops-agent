@@ -9,7 +9,7 @@ from kubernetes_asyncio.client.exceptions import ApiException
 from kubernetes_asyncio.config import ConfigException
 
 from hoa_mcp.k8s_read import kube
-from hoa_mcp.k8s_read.kube import ApiKubeReader, KubeError, decode_log
+from hoa_mcp.k8s_read.kube import ApiKubeReader, KubeError, check_in_cluster, decode_log
 
 
 class FakeApiClient:
@@ -112,6 +112,7 @@ async def test_in_cluster_reader_loads_the_pod_token_on_every_call(
     assert await reader._call(host) == "https://kubernetes.default.svc"
     # 호출마다 토큰 파일을 다시 읽는다 — 투영된 ServiceAccount 토큰은 주기적으로 바뀐다
     assert len(loads) == 2
+    assert loads[0] is not loads[1]
 
 
 @pytest.mark.anyio
@@ -126,3 +127,31 @@ async def test_in_cluster_reader_outside_a_pod_is_a_kube_error(
 
     with pytest.raises(KubeError, match="in-cluster service account could not be loaded"):
         await ApiKubeReader(None)._call(never)
+
+
+def test_check_in_cluster_reports_the_loader_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(client_configuration: kube.client.Configuration) -> None:
+        raise ConfigException("Service token file does not exist.")
+
+    monkeypatch.setattr(kube.config, "load_incluster_config", fail)
+    with pytest.raises(KubeError, match="Service token file does not exist."):
+        check_in_cluster()
+
+
+def test_check_in_cluster_passes_when_the_token_loads(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(kube.config, "load_incluster_config", lambda client_configuration: None)
+    check_in_cluster()
+
+
+@pytest.mark.anyio
+async def test_in_cluster_unauthorized_points_at_the_service_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(kube.config, "load_incluster_config", lambda client_configuration: None)
+
+    async def rejected(api: ApiClient) -> None:
+        raise ApiException(status=401, reason="Unauthorized")
+
+    with pytest.raises(KubeError, match="ServiceAccount token was rejected") as caught:
+        await ApiKubeReader(None)._call(rejected)
+    assert "mcp-kubeconfig" not in str(caught.value)

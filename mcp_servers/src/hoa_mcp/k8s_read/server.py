@@ -23,9 +23,15 @@ from hoa_mcp.k8s_read.convert import (
     needs_attention,
     pod_summary,
 )
-from hoa_mcp.k8s_read.kube import ApiKubeReader, KubeError, KubeReader
+from hoa_mcp.k8s_read.kube import ApiKubeReader, KubeError, KubeReader, check_in_cluster
 from hoa_mcp.k8s_read.models import DeploymentView, EventList, PodList, PodLogs
-from hoa_mcp.k8s_read.settings import ServerSettings, SettingsError, Transport, load_settings
+from hoa_mcp.k8s_read.settings import (
+    KubeAuth,
+    ServerSettings,
+    SettingsError,
+    Transport,
+    load_settings,
+)
 
 INSTRUCTIONS = (
     "Read-only Kubernetes tools for diagnosing workloads. "
@@ -62,13 +68,15 @@ def build_server(reader: KubeReader, settings: ServerSettings) -> FastMCP:
         instructions=INSTRUCTIONS,
         # 요청마다 남는 INFO 줄이 hoa investigate의 표준오류를 덮지 않게 경고 이상만 남긴다
         log_level="WARNING",
-        # 아래는 HTTP 전송(클러스터 안 파드)에서만 쓰인다
-        host="0.0.0.0",
+        # 아래는 HTTP 전송(클러스터 안 파드)에서만 쓰인다 — 차트가 파드 안에서
+        # HOA_MCP_HOST=0.0.0.0으로 연다. 항상 직접 만든 TransportSecuritySettings를 넘기므로
+        # FastMCP의 localhost 자동 설정은 적용되지 않는다
+        host=settings.host,
         port=settings.port,
         # 에이전트가 조사마다 연결을 열고 닫는다 — 세션을 쥐지 않아 복제본을 늘려도 된다
         stateless_http=True,
         json_response=True,
-        # 0.0.0.0에 묶으면 FastMCP가 Host 검사(DNS 리바인딩 방어)를 저절로 켜지 않는다
+        # 허용 Host 검사(DNS 리바인딩 방어)
         transport_security=TransportSecuritySettings(
             allowed_hosts=list(settings.allowed_hosts), allowed_origins=[]
         ),
@@ -166,5 +174,11 @@ def main() -> None:
     except SettingsError as exc:
         print(f"hoa-mcp-k8s-read: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
+    if settings.kube_auth is KubeAuth.IN_CLUSTER:
+        try:
+            check_in_cluster()
+        except KubeError as exc:
+            print(f"hoa-mcp-k8s-read: {exc}", file=sys.stderr)
+            raise SystemExit(2) from exc
     server = build_server(ApiKubeReader(settings.kubeconfig), settings)
     server.run("streamable-http" if settings.transport is Transport.HTTP else "stdio")
