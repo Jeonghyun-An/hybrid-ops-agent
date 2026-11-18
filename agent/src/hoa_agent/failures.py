@@ -16,6 +16,7 @@ class FailureKind(StrEnum):
     LLM_RATE_LIMITED = "llm_rate_limited"
 
 
+# 평가 러너(hoa_eval.agent.RATE_LIMITED_EXIT)가 LLM_RATE_LIMITED의 값으로 남은 회차를 멈춘다
 EXIT_CODES = {
     FailureKind.INVESTIGATION_FAILED: 1,
     FailureKind.SETUP_ERROR: 2,
@@ -48,7 +49,8 @@ def operator_message(kind: FailureKind, exc: Exception) -> str:
 
 def public_message(kind: FailureKind, exc: Exception) -> str:
     """API 응답용 — LLM·HTTP 오류 원문에는 내부 주소가 섞일 수 있다.
-    우리가 쓴 설정 오류 문장만 그대로 보인다."""
+    우리가 쓴 설정 오류 문장만 그대로 보인다(MCP SDK의 짧은 연결 문구가 섞일 수 있으나
+    주소는 없다)."""
     if kind is FailureKind.SETUP_ERROR:
         return str(exc)
     if kind is FailureKind.LLM_RATE_LIMITED:

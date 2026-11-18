@@ -36,7 +36,8 @@ def load_profile(name: str, env: Mapping[str, str]) -> ModelProfile:
         key = env.get("GEMINI_API_KEY", "").strip()
         if not key:
             raise LLMConfigError(
-                "GEMINI_API_KEY is not set — put it in .env and run with uv run --env-file .env"
+                "GEMINI_API_KEY is not set — put it in .env (local, "
+                "run with uv run --env-file .env) or the hoa-agent-llm Secret (cluster)"
             )
         model = env.get("HOA_GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODEL
         return ModelProfile(
@@ -46,7 +47,8 @@ def load_profile(name: str, env: Mapping[str, str]) -> ModelProfile:
         url = env.get("HOA_GEMMA_BASE_URL", "").strip()
         if not url:
             raise LLMConfigError(
-                "HOA_GEMMA_BASE_URL is not set — put it in .env and run with uv run --env-file .env"
+                "HOA_GEMMA_BASE_URL is not set — put it in .env (local, "
+                "run with uv run --env-file .env) or the hoa-agent-llm Secret (cluster)"
             )
         return ModelProfile(
             name="gemma", model=GEMMA_MODEL, base_url=url, api_key=SecretStr("EMPTY")

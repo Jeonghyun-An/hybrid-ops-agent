@@ -1,12 +1,14 @@
 import json
+import logging
+from collections.abc import Iterator
 
 import httpx
 import openai
 import pytest
 from fastapi import FastAPI
 
-from hoa_agent import __version__
-from hoa_agent.cli import main
+from hoa_agent import __version__, cli
+from hoa_agent.cli import SkipHealthChecks, main
 from hoa_agent.graph import DiagnosisSchemaError
 from hoa_agent.llm import LLMConfigError
 from hoa_agent.mcp_tools import MCPSetupError
@@ -152,3 +154,79 @@ def test_serve_refuses_bad_settings(
     env = {"HOA_MCP_URL": "http://hoa-mcp-k8s-read.hoa-system.svc/mcp", **extra}
     assert main(["serve"], env=env, run_server=never_serve) == 2
     assert message in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("url", ["hoa-mcp:8080/mcp", "ftp://hoa-mcp/mcp", "/mcp"])
+def test_serve_refuses_a_non_http_mcp_url(capsys: pytest.CaptureFixture[str], url: str) -> None:
+    assert main(["serve"], env={"HOA_MCP_URL": url}, run_server=never_serve) == 2
+    assert "must be an http:// or https:// URL" in capsys.readouterr().err
+
+
+@pytest.fixture
+def clean_logging() -> Iterator[None]:
+    names = ("", "httpx", "hoa_agent", "uvicorn.access")
+    saved = [
+        (logging.getLogger(n), logging.getLogger(n).level, list(logging.getLogger(n).filters))
+        for n in names
+    ]
+    handlers = list(logging.getLogger().handlers)
+    yield
+    for logger, level, filters in saved:
+        logger.setLevel(level)
+        logger.filters[:] = filters
+    logging.getLogger().handlers[:] = handlers
+
+
+@pytest.mark.usefixtures("clean_logging")
+def test_serve_keeps_the_llm_address_out_of_the_logs() -> None:
+    env = {"HOA_MCP_URL": "http://hoa-mcp-k8s-read.hoa-system.svc/mcp"}
+
+    assert main(["serve"], env=env, run_server=lambda app, **kwargs: None) == 0
+
+    assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
+    assert logging.getLogger("hoa_agent").getEffectiveLevel() == logging.INFO
+    access = logging.getLogger("uvicorn.access")
+    assert any(isinstance(f, SkipHealthChecks) for f in access.filters)
+
+
+def access_record(path: str) -> logging.LogRecord:
+    return logging.LogRecord(
+        "uvicorn.access",
+        logging.INFO,
+        __file__,
+        0,
+        '%s - "GET %s HTTP/1.1" 200',
+        ("ip", path),
+        None,
+    )
+
+
+def test_health_check_hits_are_dropped_from_the_access_log() -> None:
+    skip = SkipHealthChecks()
+
+    assert not skip.filter(access_record("/healthz"))
+    assert skip.filter(access_record("/investigations"))
+
+
+@pytest.mark.usefixtures("clean_logging")
+@pytest.mark.anyio
+async def test_serve_wires_env_model_and_alert_into_the_investigation(
+    monkeypatch: pytest.MonkeyPatch, result: InvestigationResult
+) -> None:
+    seen: list[tuple[str, str, object]] = []
+
+    async def recorder(alert: str, model: str, env: object = None) -> InvestigationResult:
+        seen.append((alert, model, env))
+        return result
+
+    monkeypatch.setattr(cli, "run_investigation", recorder)
+    apps: list[FastAPI] = []
+    env = {"HOA_MCP_URL": "http://hoa-mcp-k8s-read.hoa-system.svc/mcp", "HOA_MODEL": "gemini"}
+    main(["serve"], env=env, run_server=lambda app, **kwargs: apps.append(app))
+
+    transport = httpx.ASGITransport(app=apps[0])
+    async with httpx.AsyncClient(transport=transport, base_url="http://agent") as client:
+        response = await client.post("/investigations", json={"alert": "orders stuck"})
+
+    assert response.status_code == 200
+    assert seen == [("orders stuck", "gemini", env)]

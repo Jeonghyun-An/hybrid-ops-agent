@@ -5,22 +5,28 @@ import logging
 import math
 import os
 import sys
+import urllib.parse
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 
 import uvicorn
 
 from hoa_agent import __version__
 from hoa_agent.api import create_app
-from hoa_agent.failures import EXIT_CODES, KNOWN_FAILURES, FailureKind, classify, operator_message
+from hoa_agent.failures import EXIT_CODES, KNOWN_FAILURES, classify, operator_message
 from hoa_agent.investigate import run_investigation
 from hoa_agent.llm import DEFAULT_MODEL, MODEL_NAMES
 from hoa_agent.result import InvestigationResult
 
 Investigator = Callable[[str, str], Awaitable[InvestigationResult]]
-# 평가 러너(hoa_eval.agent.RATE_LIMITED_EXIT)가 이 값으로 남은 회차를 멈춘다
-RATE_LIMITED_EXIT = EXIT_CODES[FailureKind.LLM_RATE_LIMITED]
 DEFAULT_TIMEOUT_SECONDS = 300.0
 ServerRunner = Callable[..., None]
+
+
+class SkipHealthChecks(logging.Filter):
+    """프로브 요청이 접근 로그를 채우지 않게 한다."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/healthz" not in record.getMessage()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -86,12 +92,16 @@ def investigate_command(args: argparse.Namespace, investigator: Investigator) ->
 def serve_command(
     args: argparse.Namespace, env: Mapping[str, str], run_server: ServerRunner
 ) -> int:
-    if not env.get("HOA_MCP_URL", "").strip():
+    mcp_url = env.get("HOA_MCP_URL", "").strip()
+    if not mcp_url:
         print(
             "hoa: HOA_MCP_URL is not set — hoa serve reaches the MCP server over HTTP "
             "(the agent chart sets it)",
             file=sys.stderr,
         )
+        return 2
+    if urllib.parse.urlsplit(mcp_url).scheme not in ("http", "https"):
+        print("hoa: HOA_MCP_URL must be an http:// or https:// URL", file=sys.stderr)
         return 2
     model = env.get("HOA_MODEL", "").strip() or DEFAULT_MODEL
     if model not in MODEL_NAMES:
@@ -116,9 +126,12 @@ def serve_command(
     async def investigate(alert: str) -> InvestigationResult:
         return await run_investigation(alert, model, env)
 
+    # 루트는 WARNING — httpx가 요청마다 INFO로 LLM 주소 전체를 남기기 때문이다
     logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+        level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
+    logging.getLogger("hoa_agent").setLevel(logging.INFO)
+    logging.getLogger("uvicorn.access").addFilter(SkipHealthChecks())
     run_server(create_app(investigate, timeout_seconds=timeout), host=args.host, port=args.port)
     return 0
 

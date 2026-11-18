@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 
+import anyio
 import httpx
 import openai
 import pytest
@@ -55,19 +56,23 @@ async def test_a_second_request_while_busy_gets_429_with_retry_after(
 ) -> None:
     started = asyncio.Event()
     release = asyncio.Event()
+    seen: list[str] = []
 
     async def slow(alert: str) -> InvestigationResult:
+        seen.append(alert)
         started.set()
         await release.wait()
         return result
 
     async with client_for(slow) as client:
         first = asyncio.create_task(client.post("/investigations", json={"alert": "a"}))
-        await started.wait()
+        async with asyncio.timeout(5):
+            await started.wait()
         second = await client.post("/investigations", json={"alert": "b"})
         release.set()
         assert (await first).status_code == 200
 
+    assert seen == ["a"]
     assert second.status_code == 429
     assert second.headers["retry-after"] == "30"
     assert second.json() == {
@@ -161,3 +166,76 @@ async def test_health_check_does_not_investigate() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+async def test_the_lock_is_released_after_a_timeout(result: InvestigationResult) -> None:
+    calls: list[str] = []
+
+    async def sometimes_hangs(alert: str) -> InvestigationResult:
+        calls.append(alert)
+        if len(calls) == 1:
+            await asyncio.sleep(10)
+        return result
+
+    async with client_for(sometimes_hangs, timeout_seconds=0.05) as client:
+        first = await client.post("/investigations", json={"alert": "a"})
+        second = await client.post("/investigations", json={"alert": "b"})
+
+    assert (first.status_code, second.status_code) == (504, 200)
+
+
+async def test_the_timeout_cancels_nested_task_groups() -> None:
+    cleaned_up = False
+
+    async def with_children(alert: str) -> InvestigationResult:
+        nonlocal cleaned_up
+        try:
+            async with anyio.create_task_group() as group:
+                group.start_soon(anyio.sleep, 10)
+                await anyio.sleep(10)
+        finally:
+            cleaned_up = True
+        raise AssertionError("must be cancelled")
+
+    async with client_for(with_children, timeout_seconds=0.05) as client:
+        response = await client.post("/investigations", json={"alert": ALERT})
+
+    assert response.status_code == 504
+    assert cleaned_up
+
+
+async def test_an_unclassified_error_is_a_500_with_only_its_type() -> None:
+    async def crashing(alert: str) -> InvestigationResult:
+        raise KeyError("secret http://vllm.internal")
+
+    async with client_for(crashing) as client:
+        response = await client.post("/investigations", json={"alert": ALERT})
+
+    assert response.status_code == 500
+    assert response.json() == {"error": {"kind": "internal_error", "message": "KeyError"}}
+
+
+async def test_a_timeout_error_that_is_not_ours_is_a_500() -> None:
+    async def leaking(alert: str) -> InvestigationResult:
+        raise TimeoutError("inner deadline")
+
+    async with client_for(leaking) as client:
+        response = await client.post("/investigations", json={"alert": ALERT})
+
+    assert response.status_code == 500
+    assert response.json()["error"]["kind"] == "internal_error"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"alert": "   "}, {"alert": ALERT, "model": "gemini"}, {}],
+    ids=["blank", "extra", "missing"],
+)
+async def test_blank_or_unknown_request_fields_are_rejected(body: dict[str, str]) -> None:
+    async def never(alert: str) -> InvestigationResult:
+        raise AssertionError("must not be called")
+
+    async with client_for(never) as client:
+        response = await client.post("/investigations", json=body)
+
+    assert response.status_code == 422

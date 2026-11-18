@@ -52,7 +52,8 @@ def k8s_read_connection(env: Mapping[str, str]) -> StdioConnection | StreamableH
 
 @asynccontextmanager
 async def k8s_read_tools(env: Mapping[str, str]) -> AsyncIterator[list[BaseTool]]:
-    """조사 한 번 동안 MCP 서버 프로세스 하나를 띄워 두고 그 도구를 쓴다."""
+    """조사 한 번 동안 MCP 세션 하나를 열어 두고 그 도구를 쓴다 — stdio면 서버 프로세스를 띄우고,
+    HTTP면 이미 떠 있는 서버에 붙는다."""
     client = MultiServerMCPClient({SERVER_NAME: k8s_read_connection(env)})
     async with client.session(SERVER_NAME) as session:
         yield await load_mcp_tools(session)
